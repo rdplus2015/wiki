@@ -12,6 +12,7 @@ Regardless of project size, the logical build order is always the same:
 2. **Migrations** — `makemigrations` + `migrate`
 3. **Serializers** — how models turn into JSON (and back)
 4. **Views / ViewSets** — the business logic (who can do what)
+   - **Services (optional, once business logic grows)** — a `services.py` layer between the view and the ORM to pull complex business logic out of views/serializers (see Chapter 5). No need for a DAO/Repository in Django: the queryset (`Note.objects.filter(...)`) is already an abstraction over the database, unlike in Java/C# where that pattern exists to decouple data access from the persistence technology.
 5. **URLs / Routers** — wire the views to endpoints
 6. **Permissions / Auth** — who has access to what (usually DRF + JWT or Session)
 7. **Tests** — verify it works (`APITestCase`)
