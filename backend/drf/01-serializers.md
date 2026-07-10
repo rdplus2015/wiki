@@ -86,6 +86,9 @@ class ArticleSerializer(serializers.ModelSerializer):
         model = Article
         fields = ['id', 'title', 'content', 'published', 'created_at', 'author']
         read_only_fields = ['id', 'created_at']
+        # OUTPUT (GET, or response after POST/PUT): field IS included in the JSON response.
+        # INPUT (POST/PUT/PATCH): field is silently ignored if sent by the client —
+        #   no error is raised, DRF just discards it and uses the server-side value instead.
 ```
 
 `ModelSerializer` does three things for you:
@@ -126,6 +129,18 @@ class ArticleSerializer(serializers.ModelSerializer):
             'author': {'read_only': True},   # set server-side, never by the client
             'content': {'min_length': 10},
         }
+        
+    # extra_kwargs: patch attributes (read_only, required, min_length...) on a field
+    # that ModelSerializer already auto-generates, WITHOUT redeclaring the whole field.
+    # 
+    # 'author' is a ForeignKey -> ModelSerializer auto-generates it as a
+    # PrimaryKeyRelatedField. We just want to force it read_only (server sets it,
+    # client never sends it), so extra_kwargs is enough -- no need to rewrite the field.
+    #
+    # Rule of thumb:
+    #   - only tweaking 1-2 attrs (read_only, required, min_length...) -> extra_kwargs
+    #   - need to change the field type, add source=, custom validation, etc. -> declare
+    #     the field explicitly as a class attribute instead
 ```
 
 | Option | What it does | Use case |
@@ -344,6 +359,17 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ['id', 'body', 'author', 'author_id', 'created_at']
+
+   # PROBLEM: a single field can't represent a FK well in both directions --
+   # a nested serializer (AuthorSerializer) is rich on READ but not writable
+   # out of the box, while PrimaryKeyRelatedField is perfect for WRITE (just
+   # an id) but poor on READ (no detail).
+   #
+   # SOLUTION: use two separate fields for the same relation, one per direction.
+   # 'author' (read_only) shows the full nested object in GET responses.
+   # 'author_id' (write_only) accepts just an id in POST/PUT; source='author'
+   # tells DRF to write that value into the real 'author' FK field on the
+   # model, since 'author_id' itself doesn't exist there.
 ```
 
 ### Nested writable — creating related objects in a single request
