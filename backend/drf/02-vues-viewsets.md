@@ -222,6 +222,88 @@ class ArticleDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 ---
 
+
+## APIView vs GenericAPIView, what actually disappears
+
+### The starting problem (APIView)
+
+With `APIView`, every HTTP method (`get`, `post`...) is written **entirely by hand**:
+- fetching the queryset
+- instantiating the serializer (with `context` repeated every time)
+- handling `is_valid()` / errors
+- building the `Response`
+
+Result: nearly identical code gets repeated for every model (Notebook, Category...).
+
+### What GenericAPIView adds (without mixins)
+
+Two attributes declared once per class:
+- `serializer_class` → replaces manually writing `NotebookSerializer(..., context=...)`
+- via `self.get_serializer(...)`, `context={'request': request}` is added automatically
+
+One method you still write yourself:
+- `get_queryset()` → centralizes the filtering logic (e.g. `.filter(author=self.request.user)`)
+
+**Important**: at this stage, there's still no automatic `get()`/`post()`.
+You still write them, but their content becomes shorter (calling `get_queryset()` / `get_serializer()`).
+
+### What Mixins add
+
+A Mixin = a class that already contains a fully written method (`.list()`, `.create()`...).
+Through inheritance, your class "receives" these methods for free.
+
+Key point: **the mixin's method itself calls `self.get_queryset()` / `self.get_serializer()`**
+— the ones YOU wrote in your class. The mixin doesn't rewrite them, it *uses* them.
+
+```python
+# Simplified — what ListModelMixin does internally (already written inside DRF)
+def list(self, request, *args, **kwargs):
+    queryset = self.get_queryset()          # ← calls YOUR method
+    serializer = self.get_serializer(queryset, many=True)  # ← uses YOUR serializer_class
+    return Response(serializer.data)
+```
+
+Consequence: you no longer write the body of `get()`, just:
+```python
+def get(self, request, *args, **kwargs):
+    return self.list(request, *args, **kwargs)
+```
+
+### What ready-made generic views (ListCreateAPIView, etc.) add
+
+Last layer: DRF has already combined the most common mixins AND already written
+the `get()`/`post()` methods that call them. So even `def get()` / `def post()` disappear.
+
+Only what's **specific to your case** remains:
+```python
+class NotebookListView(generics.ListCreateAPIView):
+    serializer_class = NotebookSerializer
+
+    def get_queryset(self):
+        return Notebook.objects.filter(author=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+```
+
+### How DRF knows "read or create" without you writing it
+
+It's never business logic that decides — it's the **HTTP verb** of the incoming request
+(`GET` vs `POST`) that's intercepted way down, at the `APIView` level, and automatically
+routed to `.get()` or `.post()`. Ready-made views already have these `.get()`/`.post()`
+written, pointing to `.list()`/`.create()`.
+
+### Visual recap — what disappears at each layer
+
+| Layer | You still write |
+|---|---|
+| `APIView` | everything: queryset, serializer, validation, response — for every method |
+| `GenericAPIView` (no mixins) | `get()`/`post()` but shorter (`get_queryset()`, `get_serializer()`) |
+| `GenericAPIView` + Mixins | just `get_queryset()` + one line `return self.list(...)` |
+| `ListCreateAPIView` (ready-made) | just `get_queryset()` + `perform_create()` — nothing else |
+
+
+
 ## 2.3 ViewSet and ModelViewSet — maximum abstraction
 
 A `ViewSet` groups all of a resource's actions into a single class, and lets the router generate URLs automatically.
