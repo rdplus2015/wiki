@@ -48,23 +48,7 @@ differently depending on where you type it.
 
 ---
 
-## 5. Installation
-
----
-
-## 6. Identity & credentials model
-
----
-
-## 7. Configuration
-
----
-
-## 8. Temporary credentials
-
----
-
-## 9. References
+## 5. References
 
 - [AWS CLI v2 user guide](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html)
 - [AWS CLI configuration basics](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)
