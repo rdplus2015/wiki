@@ -1,0 +1,173 @@
+# ============================================================================
+# SAM TEMPLATE — ANNOTATED REFERENCE MODEL
+# Base structure to check against when starting or reviewing a new template.
+# ============================================================================
+
+# Fixed CloudFormation format version — historical convention, never changes.
+AWSTemplateFormatVersion: '2010-09-09'
+
+# Activates SAM: tells CloudFormation to translate every AWS::Serverless::*
+# shortcut in this file into its full, native CloudFormation equivalent
+# before deploying. Without this line, this would be a plain CloudFormation
+# template, not a SAM template.
+Transform: AWS::Serverless-2016-10-31
+
+# Free-text description of the stack. The ">" folds the following indented
+# lines into a single string (line breaks become spaces).
+Description: >
+  fraud-detector
+
+  Sample SAM Template for fraud-detector
+
+# ----------------------------------------------------------------------------
+# GLOBALS
+# Default values automatically INHERITED by every AWS::Serverless::* resource
+# (Function, Api, HttpApi, SimpleTable) declared below in Resources.
+# Does NOT apply to native CloudFormation resource types (e.g.
+# AWS::DynamoDB::Table) — those must set every property explicitly, every
+# time, with no inheritance from this block.
+# More info: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+# ----------------------------------------------------------------------------
+Globals:
+  # Defaults applied to every AWS::Serverless::Function below, unless a
+  # function overrides a given key in its own Properties (local value wins).
+  Function:
+    Timeout: 3   # seconds before AWS kills the function's execution
+
+    # Optional structured logging config for every function.
+    # Learn more: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig
+    LoggingConfig:
+      LogFormat: JSON
+
+  # NOTE: an Api: block would go here, as a SIBLING of Function: (same
+  # indentation level, not nested inside it) — for shared CORS settings
+  # applied to every API:
+  #
+  # Api:
+  #   Cors:
+  #     AllowMethods: "'GET,POST,OPTIONS'"
+  #     AllowHeaders: "'Content-Type'"
+  #     AllowOrigin: "'*'"
+  #
+  # Common mistake: nesting Api/Cors INSIDE Function: — it must sit at the
+  # same level as Function, not under it. Also note: this only configures
+  # the OPTIONS preflight mock response API Gateway returns automatically —
+  # each Lambda must still explicitly return its own
+  # Access-Control-Allow-Origin header in its actual response.
+
+# ----------------------------------------------------------------------------
+# RESOURCES
+# Every AWS resource that gets physically created at deploy time. A Lambda
+# function is just one resource type among many (same category as a table,
+# a bucket, a queue...).
+# ----------------------------------------------------------------------------
+Resources:
+
+  # --- A Lambda function, using the SAM shorthand type ---------------------
+  HelloWorldFunction:
+    # AWS::Serverless::Function = SAM's shorthand for a Lambda function.
+    # More info: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: hello_world/        # folder containing this function's code + requirements.txt
+      Handler: app.lambda_handler  # <file>.<function> entry point Lambda calls on invocation
+      Runtime: python3.14
+      Architectures:
+        - x86_64
+      # Events = how this function gets triggered. Each entry under Events
+      # generates the necessary trigger resource(s) automatically — here,
+      # an API Gateway route wired to this function via Lambda Proxy
+      # integration, with NO manual API Gateway resource declared anywhere
+      # in this file (see the implicit ServerlessRestApi note in Outputs).
+      Events:
+        HelloWorld:
+          # Type: Api = create/reuse an API Gateway REST API endpoint.
+          # More info: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api
+          Properties:
+            Path: /hello     # the route
+            Method: get      # the HTTP verb accepted
+
+  # --- A DynamoDB table, using the FULL native CloudFormation type ---------
+  # Why not the SAM shortcut (AWS::Serverless::SimpleTable)? SimpleTable
+  # does NOT support Global Secondary Indexes. Any table needing a GSI (like
+  # this one) must use the native AWS::DynamoDB::Table type instead — which
+  # also means it gets NO Globals inheritance; everything below is explicit.
+  # More info: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-dynamodb-table.html
+  FraudDetectionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: FraudDetectionTable
+      BillingMode: PAY_PER_REQUEST   # no capacity planning — pay per read/write request
+
+      # STEP 1 — Declare the existence + data type of every attribute that
+      # will act as a KEY somewhere (main table key OR a GSI key).
+      # This is NOT a schema of every attribute the table will ever store —
+      # "free" attributes like amount/merchant/etc. are never declared here,
+      # DynamoDB is schemaless for non-key attributes.
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S   # S = String, N = Number, B = Binary
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+
+      # STEP 2 — Assign the ROLE of each attribute for THE MAIN TABLE.
+      # HASH = partition key (required), RANGE = sort key (optional).
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+      # STEP 2bis — Same principle, but for a SEPARATE index (GSI), with its
+      # own independent KeySchema, reusing attributes already declared once
+      # in AttributeDefinitions above (no need to redeclare their type).
+      GlobalSecondaryIndexes:
+        - IndexName: status-index
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          # ALL = every attribute of the item is copied into the index
+          # (simplest option; costs more storage than a partial projection,
+          # but avoids a second read to fetch the rest of the item).
+          Projection:
+            ProjectionType: ALL
+
+# ----------------------------------------------------------------------------
+# OUTPUTS
+# Values displayed after a successful deployment — useful for grabbing an
+# endpoint URL or an ARN without digging through the console.
+# ----------------------------------------------------------------------------
+Outputs:
+  # ServerlessRestApi is an IMPLICIT resource: SAM creates it automatically
+  # behind the scenes because HelloWorldFunction declared an Events: Type: Api
+  # above — it is never written explicitly anywhere under Resources, yet it
+  # can still be referenced here by that generated logical name.
+  # More info on other implicit resources: https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  HelloWorldApi:
+    Description: API Gateway endpoint URL for Prod stage for Hello World
+      function
+    # !Sub builds a string, substituting ${...} placeholders: a resource
+    # reference (ServerlessRestApi) and two AWS pseudo-parameters resolved
+    # automatically at deploy time (current region, current partition's
+    # URL suffix — normally "amazonaws.com").
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/hello/"
+
+  HelloWorldFunction:
+    Description: Hello World Lambda Function ARN
+    # !GetAtt <LogicalName>.<Attribute> — pulls a specific attribute off a
+    # declared resource. Here, the function's ARN.
+    Value: !GetAtt HelloWorldFunction.Arn
+
+  HelloWorldFunctionIamRole:
+    Description: Implicit IAM Role created for Hello World function
+    # Another implicit resource: SAM auto-generates an execution role for
+    # HelloWorldFunction (named <FunctionLogicalName>Role by convention),
+    # even though no IAM role is declared anywhere in this file.
+    Value: !GetAtt HelloWorldFunctionRole.Arn
