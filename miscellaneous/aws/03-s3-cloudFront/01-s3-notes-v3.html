@@ -1,0 +1,584 @@
+<title>Carte mentale S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: arbre (racine à gauche, colonne vertébrale, 9 branches empilées) ; contenu des branches en 2 colonnes sur grand écran, arbre vertical sur mobile */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --fg: #16211f;
+  --muted: #5a6864;
+  --line: #b9c6c2;
+  --accent: #0f6b5c;
+  --accent-soft: #dcefe9;
+  --trap: #9a4b00;
+  --trap-soft: #fdebd7;
+  --new: #2e4fa8;
+  --new-soft: #e2e8fa;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1614; --surface: #17211e; --fg: #e3ece9; --muted: #93a39e; --line: #33443f;
+    --accent: #5cc7b0; --accent-soft: #173a33; --trap: #f0a95c; --trap-soft: #3a2712;
+    --new: #93acf5; --new-soft: #1c2645; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1614; --surface: #17211e; --fg: #e3ece9; --muted: #93a39e; --line: #33443f;
+  --accent: #5cc7b0; --accent-soft: #173a33; --trap: #f0a95c; --trap-soft: #3a2712;
+  --new: #93acf5; --new-soft: #1c2645; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 32px 16px 56px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 28px; }
+h1 { font-family: var(--f-display); font-weight: 800; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h1 small { display: block; font-family: var(--f-body); font-weight: 500; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; color: var(--muted); }
+.tag { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 7px; border-radius: 4px; vertical-align: 1px; white-space: nowrap; }
+.tag.trap { background: var(--trap-soft); color: var(--trap); }
+.tag.new { background: var(--new-soft); color: var(--new); }
+code { font-family: var(--f-mono); font-size: 12px; background: var(--accent-soft); color: var(--fg); padding: 0 4px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 6px 0 2px; background: var(--accent-soft); border-radius: 6px; padding: 8px 10px; overflow-x: auto; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+abbr { text-decoration: none; border-bottom: 1px dotted var(--muted); cursor: help; }
+
+/* ---- Arbre ---- */
+.map { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: start; }
+.root { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--accent); color: var(--bg); border-radius: 14px; padding: 22px 16px; text-align: center; }
+.root b { display: block; font-family: var(--f-display); font-size: 34px; font-weight: 800; line-height: 1; }
+.root span { font-size: 12px; opacity: .9; }
+.branches { list-style: none; margin: 0 0 0 28px; padding: 0 0 0 28px; border-left: 2px solid var(--line); display: grid; gap: 14px; }
+.branch { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 14px; min-width: 0; }
+.branch::before { content: ""; position: absolute; left: -29px; top: 24px; width: 28px; border-top: 2px solid var(--line); }
+.branch.focus { border-color: var(--accent); border-width: 1.5px; }
+.branch h2 { font-family: var(--f-display); font-weight: 600; font-size: 19px; margin: 0 0 10px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.branch h2 .n { font-family: var(--f-mono); font-size: 11px; color: var(--accent); font-weight: 500; }
+.branch h2 .sub { font-family: var(--f-body); font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.branch h3 { font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+.cols { columns: 2 320px; column-gap: 32px; }
+.blk { break-inside: avoid; margin-bottom: 14px; }
+.blk:last-child { margin-bottom: 0; }
+.branch ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.branch li { position: relative; padding-left: 14px; }
+.branch li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.branch li ul { margin-top: 4px; gap: 3px; }
+.branch li li { color: var(--muted); }
+.branch li li::before { background: none; border: 1.5px solid var(--line); width: 5px; height: 5px; }
+.branch li.trap::before { background: var(--trap); border-radius: 1px; transform: rotate(45deg); }
+.branch li.new::before { background: var(--new); }
+.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+p.note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+/* schéma enveloppe */
+.env { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; margin: 4px 0 6px; }
+.env span { border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; background: var(--bg); }
+.env span.k { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.env i { color: var(--muted); font-style: normal; }
+
+/* tableaux */
+.tbl { overflow-x: auto; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+td:first-child { white-space: nowrap; }
+
+/* glossaire */
+.gloss { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 20px; margin: 0; }
+.gloss div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.gloss dt { font-family: var(--f-mono); font-weight: 500; color: var(--accent); font-size: 12.5px; }
+.gloss dd { margin: 0; font-size: 12.5px; }
+.gloss dd em { color: var(--muted); font-style: normal; }
+
+.recap { margin-top: 28px; background: var(--trap-soft); border-radius: 12px; padding: 18px 20px; }
+.recap h2 { font-family: var(--f-display); font-size: 20px; margin: 0 0 10px; color: var(--trap); }
+.recap ol { margin: 0; padding-left: 22px; columns: 2 320px; column-gap: 32px; }
+.recap li { margin-bottom: 5px; break-inside: avoid; }
+
+@media (max-width: 720px) {
+  .map { grid-template-columns: minmax(0, 1fr); }
+  .root { position: relative; top: 0; }
+  .root::after { content: ""; position: absolute; left: 28px; bottom: -20px; height: 20px; border-left: 2px solid var(--line); }
+  .branches { margin: 20px 0 0 28px; padding-left: 16px; }
+  .branch { padding: 12px 14px; }
+  .branch::before { left: -17px; width: 16px; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><small>AWS DVA-C02 · Module 3</small>Amazon S3, carte mentale</h1>
+    <div class="legend">
+      <span><span class="tag trap">Piège</span> classique à l'examen</span>
+      <span><span class="tag new">À jour</span> diffère des notes du cours</span>
+      <span>Sigles soulignés en pointillé : voir le glossaire en bas</span>
+    </div>
+  </header>
+
+  <div class="map">
+    <div class="root"><b>S3</b><span>Simple Storage Service</span></div>
+
+    <ul class="branches">
+
+      <!-- 01 -->
+      <li class="branch">
+        <h2><span class="n">01</span>Fondamentaux</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li>Stockage <b>objet</b> (pas bloc, pas fichier)</li>
+            <li>Durabilité <span class="num">11 9s</span> (99,999999999 %)</li>
+            <li>Événements (create, delete, restore, réplication)
+              <ul><li>Cibles : <b>Lambda, <abbr title="Simple Notification Service">SNS</abbr>, <abbr title="Simple Queue Service">SQS</abbr></b></li></ul>
+            </li>
+            <li class="trap"><span class="tag trap">Piège</span> Pas de scripting serveur (PHP, JSP, ASP.NET)</li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li>Cas d'usage
+              <ul>
+                <li>Stockage et distribution de contenu (+ CloudFront)</li>
+                <li>Backup / archive → lifecycle vers Glacier</li>
+                <li>Data lake, big data</li>
+                <li><abbr title="Disaster Recovery">DR</abbr> avec <b><abbr title="Cross-Region Replication">CRR</abbr></b> (réplication asynchrone entre régions)</li>
+                <li>Site web statique</li>
+              </ul>
+            </li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 02 -->
+      <li class="branch">
+        <h2><span class="n">02</span>Buckets</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li>Nom <b>globalement unique</b> (tous comptes, toutes régions)
+              <ul>
+                <li><span class="num">3–63</span> caractères</li>
+                <li>minuscules, chiffres, tirets</li>
+                <li>pas de majuscules ni d'underscore</li>
+              </ul>
+            </li>
+            <li>Bucket <b>régional</b> : choix selon latence, coût, réglementation</li>
+            <li class="trap"><span class="tag trap">Piège</span> Nom et région <b>non modifiables</b> après création</li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li>URL virtual-host-style
+              <ul><li><code>bucket.s3.&lt;region&gt;.amazonaws.com/&lt;key&gt;</code></li></ul>
+            </li>
+            <li>Pas de vrais dossiers : des <b>préfixes</b> dans la clé
+              <ul><li><code>2021/math/john.txt</code> → filtrer par préfixe</li></ul>
+            </li>
+            <li>Unité de facturation et de contrôle d'accès</li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 03 -->
+      <li class="branch">
+        <h2><span class="n">03</span>Objets et metadata</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li>Objet = <b>data + metadata</b>, identifié par une <b>clé</b> unique</li>
+            <li>Metadata système
+              <ul>
+                <li>Gérées par S3 : date de création, taille, version</li>
+                <li>Modifiables : storage class, chiffrement</li>
+              </ul>
+            </li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li>Metadata utilisateur
+              <ul>
+                <li>Préfixe obligatoire <code>x-amz-meta-</code></li>
+                <li>Stockées avec l'objet, jamais traitées par S3</li>
+              </ul>
+            </li>
+            <li>Headers utiles à l'upload : <code>ContentType</code>, <code>CacheControl</code> (<code>max-age=0</code> = pas de cache navigateur)</li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 04 -->
+      <li class="branch">
+        <h2><span class="n">04</span>Opérations</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li><b>PUT</b> : écrit toujours l'objet entier
+              <ul>
+                <li class="trap">Pas de mise à jour partielle</li>
+                <li>Upload simple : jusqu'à <span class="num">5 GB</span></li>
+                <li>Multipart recommandé dès <span class="num">100 MB</span></li>
+                <li>Multipart <b>obligatoire</b> &gt; <span class="num">5 GB</span>, max <span class="num">5 TB</span></li>
+                <li>Parts en parallèle, reprise possible</li>
+              </ul>
+            </li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li><b>GET</b> : objet complet ou <b>byte-range</b> (connexion lente, traitement partiel)</li>
+            <li><b>DELETE</b> : un ou plusieurs objets (voir versioning)</li>
+            <li><abbr title="Software Development Kit">SDK</abbr> Python : <code>boto3.client("s3").upload_file(...)</code></li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 05 -->
+      <li class="branch">
+        <h2><span class="n">05</span>Versioning</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li>Plusieurs versions d'une même clé, chacune avec un <b>version ID</b></li>
+            <li>Protège des écrasements, suppressions, bugs applicatifs</li>
+            <li class="trap"><span class="tag trap">Piège</span> Désactivé par défaut ; une fois activé, seulement <b>suspendu</b>, jamais désactivé</li>
+            <li>Chaque version est facturée</li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li>DELETE sans version ID
+              <ul><li>→ <b>delete marker</b> devient la version courante → GET renvoie <b>404</b></li></ul>
+            </li>
+            <li>DELETE avec clé + version ID
+              <ul><li>→ suppression <b>définitive</b> de cette version</li></ul>
+            </li>
+            <li>Requis pour <b>Object Lock</b> et pour la réplication</li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 06 CHIFFREMENT -->
+      <li class="branch focus">
+        <h2><span class="n">06</span>Chiffrement<span class="sub">qui tient la clé, et qui peut lire</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Les sigles</h3>
+            <ul>
+              <li><b>SSE</b> = <i>Server-Side Encryption</i> : c'est S3 qui chiffre et déchiffre</li>
+              <li><b>SSE-S3</b> : clé gérée par S3</li>
+              <li><b>SSE-KMS</b> : clé gérée par <b>KMS</b> (<i>Key Management Service</i>)</li>
+              <li><b>SSE-C</b> : clé fournie par le client (<i>Customer-provided key</i>)</li>
+              <li><b>Client-side (CSE)</b> : <i>Client-Side Encryption</i>, c'est toi qui chiffres avant l'upload</li>
+              <li><b>AES-256</b> : l'algorithme utilisé (<i>Advanced Encryption Standard</i>, clé de 256 bits)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Le principe : 2 clés (envelope encryption)</h3>
+            <div class="env">
+              <span class="k">Clé maître</span><i>verrouille</i><span class="k">Clé de données</span><i>verrouille</i><span>Ton fichier</span>
+            </div>
+            <ul>
+              <li><b>Clé de données</b> : une par objet, elle chiffre le fichier</li>
+              <li><b>Clé maître</b> : elle chiffre la clé de données</li>
+              <li>S3 stocke le fichier chiffré + sa clé de données chiffrée</li>
+              <li>Intérêt : on protège et contrôle <b>une seule</b> clé maître au lieu de millions</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Les 4 modes = qui tient la clé maître</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Mode</th><th>Qui tient la clé</th><th>Toi, tu fais</th><th>Qui peut lire</th></tr></thead>
+              <tbody>
+                <tr><td><b>SSE-S3</b></td><td>S3, invisible</td><td>Rien</td><td>Tous ceux qui ont les droits S3</td></tr>
+                <tr><td><b>SSE-KMS</b></td><td>KMS, dans ton compte</td><td>Nommer la clé à l'upload</td><td>Droits S3 <b>et</b> <code>kms:Decrypt</code>, chaque lecture loggée</td></tr>
+                <tr><td><b>SSE-C</b></td><td>Toi, hors AWS</td><td>Envoyer la clé à l'upload <b>et</b> au download</td><td>Ceux qui ont ta clé</td></tr>
+                <tr><td><b>Client-side</b></td><td>Toi</td><td>Chiffrer toi-même avant l'upload</td><td>Ceux qui ont ta clé ; AWS ne voit rien</td></tr>
+              </tbody>
+            </table></div>
+            <p class="note">Dans les 3 modes SSE, S3 fait le travail. Seule l'origine de la clé change.</p>
+          </div>
+
+          <div class="blk">
+            <h3>Tu chiffres déjà sans le savoir</h3>
+            <ul>
+              <li class="new"><span class="tag new">À jour</span> Depuis janv. 2023, <b>SSE-S3 automatique</b> sur tout nouvel objet</li>
+              <li><b>Transparent</b> : S3 chiffre à l'écriture, déchiffre à la lecture</li>
+              <li>Vérifier : <code>aws s3api head-object --bucket b --key k</code>
+                <ul><li><code>"ServerSideEncryption": "AES256"</code> = SSE-S3 ; <code>"aws:kms"</code> = SSE-KMS</li></ul>
+              </li>
+              <li class="trap"><span class="tag trap">Piège</span> SSE-S3 protège contre le <b>vol de disque</b>, pas contre quelqu'un qui a les droits IAM</li>
+              <li>Donc au quotidien, ta vraie protection reste les <b>permissions</b> (branche 07)</li>
+              <li>SSE-S3 : AES-256, rotation de la clé maître automatique par S3</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Pourquoi aller plus loin que SSE-S3</h3>
+            <ul>
+              <li><b>Deuxième serrure</b> : un dev avec <code>s3:*</code> voit les fichiers mais ne peut pas les ouvrir sans la clé KMS</li>
+              <li><b>Coupure d'urgence</b> : fuite de credentials → désactiver la clé KMS, plus personne ne lit</li>
+              <li><b>Audit</b> : CloudTrail loggue chaque usage de la clé (qui, quand, quel objet)</li>
+              <li><b>Contrôle de la clé</b> : tu choisis qui l'utilise (key policy) et tu gères sa rotation</li>
+              <li><b>Obligation légale</b> (banque, santé) : la clé ne doit pas être chez AWS → SSE-C ou client-side</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>SSE-KMS en pratique</h3>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> Lire demande <code>s3:GetObject</code> <b>et</b> <code>kms:Decrypt</code>, sinon AccessDenied</li>
+              <li>Chaque GET/PUT appelle KMS, qui a des <b>quotas</b> → throttling possible
+                <ul><li>Solution : <b>S3 Bucket Key</b> (beaucoup moins d'appels KMS)</li></ul>
+              </li>
+            </ul>
+<pre><code>s3.upload_file("f.pdf", "bucket", "f.pdf", ExtraArgs={
+  "ServerSideEncryption": "aws:kms",
+  "SSEKMSKeyId": "arn:aws:kms:...:key/abcd"})
+# download : rien à préciser, S3 appelle KMS pour toi</code></pre>
+          </div>
+
+          <div class="blk">
+            <h3>SSE-C en pratique</h3>
+            <ul>
+              <li>Clé envoyée à <b>chaque requête</b>, S3 l'oublie aussitôt</li>
+              <li>HTTPS obligatoire</li>
+              <li class="trap">Clé perdue = données perdues</li>
+            </ul>
+<pre><code>args = {"SSECustomerAlgorithm": "AES256",
+        "SSECustomerKey": ma_cle}
+s3.upload_file(..., ExtraArgs=args)
+s3.download_file(..., ExtraArgs=args)  # même clé</code></pre>
+          </div>
+
+          <div class="blk">
+            <h3>Client-side en pratique</h3>
+            <ul>
+              <li>S3 ne stocke que du texte chiffré, il ne sait même pas que c'est chiffré</li>
+              <li>Pourquoi : AWS ne doit jamais voir le clair (loi, contrat) ; défense en profondeur (bucket public par erreur, credentials volés → toujours illisible) ; chiffrement de bout en bout depuis la machine source</li>
+              <li>Coût : gestion des clés à ta charge, Athena / S3 Select / Lambda ne lisent plus le contenu, plus de code</li>
+              <li class="trap">Clé perdue = données perdues</li>
+              <li>Outils : <b>Amazon S3 Encryption Client</b>, <b>AWS Encryption SDK</b> (jamais son propre algo)</li>
+              <li>La clé maître peut rester dans KMS, le chiffrement se fait quand même en local</li>
+            </ul>
+<pre><code>chiffre = mon_chiffrement(open("f.pdf","rb").read(), ma_cle)
+s3.put_object(Bucket="bucket", Key="f.pdf", Body=chiffre)</code></pre>
+          </div>
+
+          <div class="blk">
+            <h3>En transit et règles imposées</h3>
+            <ul>
+              <li>HTTPS / <abbr title="Transport Layer Security">TLS</abbr>
+                <ul><li class="new"><span class="tag new">À jour</span> TLS <span class="num">1.2</span> minimum</li></ul>
+              </li>
+              <li>Forcer HTTPS : Deny si <code>aws:SecureTransport</code> = <code>false</code></li>
+              <li>Forcer un chiffrement : Deny si le header <code>x-amz-server-side-encryption</code> ≠ <code>AES256</code> / <code>aws:kms</code></li>
+              <li>Changer le chiffrement par défaut ne rechiffre pas les objets existants</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Lequel choisir</h3>
+            <ul>
+              <li>Site statique, assets publics → <b>SSE-S3</b> (rien à faire)</li>
+              <li>Données sensibles, audit, révocation → <b>SSE-KMS</b></li>
+              <li>Clé hors d'AWS, mais AWS chiffre → <b>SSE-C</b></li>
+              <li>AWS ne doit rien voir en clair → <b>client-side</b></li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 07 ACCES -->
+      <li class="branch focus">
+        <h2><span class="n">07</span>Contrôle d'accès<span class="sub">qui peut faire quoi, et qui gagne en cas de conflit</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Les 3 types et quand les utiliser</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Type</th><th>Attaché à</th><th>Utiliser quand</th></tr></thead>
+              <tbody>
+                <tr><td><b>Policy <abbr title="Identity and Access Management">IAM</abbr></b><br><span style="color:var(--muted)">identity-based</span></td><td>User, groupe, rôle</td><td>Une identité <b>de ton compte</b> accède au bucket (ex. rôle d'une Lambda). Cas le plus courant.</td></tr>
+                <tr><td><b>Bucket policy</b><br><span style="color:var(--muted)">resource-based</span></td><td>Le bucket (JSON)</td><td>Accès <b>public</b>, accès <b>cross-account</b>, ou <b>règle pour tous</b> (HTTPS, chiffrement, VPC endpoint, IP)</td></tr>
+                <tr><td><b><abbr title="Access Control List">ACL</abbr></b><br><span style="color:var(--muted)">resource-based</span></td><td>Bucket ou objet (XML)</td><td>Ne plus utiliser. Théorie d'examen seulement.</td></tr>
+              </tbody>
+            </table></div>
+            <p class="note">Ton code dans ton compte → IAM. Public, cross-account ou règle globale → bucket policy. ACL → oublier.</p>
+            <ul style="margin-top:8px">
+              <li>ACL, pour la théorie : c'était le seul moyen de gérer un objet uploadé par <b>un autre compte</b> (le bucket owner ne le possédait pas). Réglé par <i>Bucket owner enforced</i>.</li>
+              <li>Bucket policy = même langage JSON qu'IAM, avec en plus un champ <code>Principal</code> (qui)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Qui gagne : l'ordre d'évaluation</h3>
+            <ul>
+              <li>Les policies ne s'annulent pas, AWS les évalue <b>toutes ensemble</b></li>
+              <li><b>1. Refus implicite</b> : aucun Allow nulle part → refusé</li>
+              <li><b>2. Un seul Allow suffit</b> (même compte) : IAM <i>ou</i> bucket policy</li>
+              <li class="trap"><b>3. Un Deny explicite gagne toujours</b>, même contre 10 Allow</li>
+              <li>Exemple : rôle IAM avec <code>s3:*</code> + bucket policy qui refuse le HTTP → requête HTTP refusée</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Cross-account</h3>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> Un seul Allow ne suffit plus : il en faut <b>des deux côtés</b>
+                <ul>
+                  <li>Bucket policy du compte A autorise le compte B</li>
+                  <li>Policy IAM de l'identité du compte B autorise l'action</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Au-dessus de tout</h3>
+            <ul>
+              <li>Tout est <b>privé par défaut</b></li>
+              <li><b>Block Public Access</b> (bucket ou compte) : bloque une bucket policy <code>"Principal": "*"</code> même valide</li>
+              <li class="new"><span class="tag new">À jour</span> <b>Object Ownership</b> = <i>Bucket owner enforced</i> par défaut depuis avril 2023 : ACL désactivées, le bucket possède tous les objets</li>
+              <li>Pour SSE-KMS, la <b>key policy</b> KMS s'ajoute : il faut aussi <code>kms:Decrypt</code></li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Presigned URL</h3>
+            <ul>
+              <li>GET ou PUT sur <b>un objet</b>, sans donner d'autre droit</li>
+              <li>Pas un 4e type : elle <b>emprunte les permissions</b> de celui qui la signe (sans droit → 403)</li>
+              <li>Max <span class="num">7 jours</span> (credentials d'IAM user)</li>
+              <li class="trap">Signée par un rôle / <abbr title="Security Token Service">STS</abbr> : expire au plus tard avec la session</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3><abbr title="Cross-Origin Resource Sharing">CORS</abbr></h3>
+            <ul>
+              <li>Du JS chargé depuis un autre domaine appelle le bucket → le navigateur exige CORS</li>
+              <li>Config JSON : <code>AllowedOrigins</code>, <code>AllowedMethods</code>, <code>AllowedHeaders</code>, <code>MaxAgeSeconds</code></li>
+              <li>Max <span class="num">100</span> règles</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Exemples concrets</h3>
+            <p class="note" style="margin:0 0 4px">1. Policy IAM sur le rôle d'une Lambda (ton compte)</p>
+<pre><code>{ "Effect": "Allow",
+  "Action": ["s3:GetObject", "s3:PutObject"],
+  "Resource": "arn:aws:s3:::mon-bucket/*" }</code></pre>
+            <p class="note" style="margin:8px 0 4px">2. Bucket policy : lecture publique (site statique)</p>
+<pre><code>{ "Effect": "Allow",
+  "Principal": "*",
+  "Action": "s3:GetObject",
+  "Resource": "arn:aws:s3:::mon-bucket/*" }</code></pre>
+            <p class="note" style="margin:8px 0 4px">3. Bucket policy : cross-account (+ Allow IAM côté compte B)</p>
+<pre><code>{ "Effect": "Allow",
+  "Principal": { "AWS": "arn:aws:iam::222233334444:root" },
+  "Action": "s3:GetObject",
+  "Resource": "arn:aws:s3:::mon-bucket/*" }</code></pre>
+          </div>
+
+          <div class="blk">
+            <h3>Exemples : imposer une règle avec Deny</h3>
+            <p class="note" style="margin:0 0 4px">4. Refuser tout accès sans HTTPS</p>
+<pre><code>{ "Effect": "Deny",
+  "Principal": "*",
+  "Action": "s3:*",
+  "Resource": ["arn:aws:s3:::mon-bucket",
+               "arn:aws:s3:::mon-bucket/*"],
+  "Condition": { "Bool":
+    { "aws:SecureTransport": "false" } } }</code></pre>
+            <p class="note" style="margin:8px 0 4px">5. Refuser un upload qui n'est pas en SSE-KMS</p>
+<pre><code>{ "Effect": "Deny",
+  "Principal": "*",
+  "Action": "s3:PutObject",
+  "Resource": "arn:aws:s3:::mon-bucket/*",
+  "Condition": { "StringNotEquals":
+    { "s3:x-amz-server-side-encryption": "aws:kms" } } }</code></pre>
+            <p class="note" style="margin:8px 0 0">Resource : <code>mon-bucket</code> = le bucket lui-même (ListBucket) ; <code>mon-bucket/*</code> = les objets (Get/Put/Delete).</p>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 08 -->
+      <li class="branch">
+        <h2><span class="n">08</span>Site web statique</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li><b>S3 website hosting seul</b>
+              <ul>
+                <li><code>bucket.s3-website-&lt;region&gt;.amazonaws.com</code></li>
+                <li>Bucket public + bucket policy</li>
+                <li>index.html / error.html, redirections</li>
+                <li class="trap">HTTP seulement</li>
+              </ul>
+            </li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li><b>S3 + CloudFront</b> (prod)
+              <ul>
+                <li>Bucket <b>privé</b>, accès via <b><abbr title="Origin Access Control">OAC</abbr></b> (remplace OAI)</li>
+                <li>HTTPS + domaine custom</li>
+                <li class="trap">Certificat <abbr title="AWS Certificate Manager">ACM</abbr> en <b>us-east-1</b></li>
+              </ul>
+            </li>
+            <li><b>Amplify Hosting</b> : S3 + CloudFront managés + CI/CD Git</li>
+            <li>Déployer : <code>aws s3 sync ./build s3://bucket --delete</code> puis invalidation CloudFront</li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 09 GLOSSAIRE -->
+      <li class="branch">
+        <h2><span class="n">09</span>Glossaire des sigles</h2>
+        <dl class="gloss">
+          <div><dt>S3</dt><dd>Simple Storage Service</dd></div>
+          <div><dt>IAM</dt><dd>Identity and Access Management <em>(users, rôles, policies)</em></dd></div>
+          <div><dt>ARN</dt><dd>Amazon Resource Name <em>(identifiant unique d'une ressource)</em></dd></div>
+          <div><dt>ACL</dt><dd>Access Control List</dd></div>
+          <div><dt>SSE</dt><dd>Server-Side Encryption <em>(S3 chiffre)</em></dd></div>
+          <div><dt>SSE-S3</dt><dd>SSE avec clé gérée par S3</dd></div>
+          <div><dt>SSE-KMS</dt><dd>SSE avec clé gérée par KMS</dd></div>
+          <div><dt>SSE-C</dt><dd>SSE avec Customer-provided key</dd></div>
+          <div><dt>CSE</dt><dd>Client-Side Encryption <em>(tu chiffres)</em></dd></div>
+          <div><dt>KMS</dt><dd>Key Management Service</dd></div>
+          <div><dt>AES-256</dt><dd>Advanced Encryption Standard, clé 256 bits</dd></div>
+          <div><dt>TLS</dt><dd>Transport Layer Security <em>(le S de HTTPS)</em></dd></div>
+          <div><dt>STS</dt><dd>Security Token Service <em>(credentials temporaires)</em></dd></div>
+          <div><dt>CORS</dt><dd>Cross-Origin Resource Sharing</dd></div>
+          <div><dt>CRR</dt><dd>Cross-Region Replication</dd></div>
+          <div><dt>DR</dt><dd>Disaster Recovery</dd></div>
+          <div><dt>OAC</dt><dd>Origin Access Control <em>(CloudFront → bucket privé)</em></dd></div>
+          <div><dt>OAI</dt><dd>Origin Access Identity <em>(ancien OAC)</em></dd></div>
+          <div><dt>ACM</dt><dd>AWS Certificate Manager</dd></div>
+          <div><dt>SNS</dt><dd>Simple Notification Service</dd></div>
+          <div><dt>SQS</dt><dd>Simple Queue Service</dd></div>
+          <div><dt>SDK</dt><dd>Software Development Kit <em>(boto3 en Python)</em></dd></div>
+          <div><dt>VPC</dt><dd>Virtual Private Cloud</dd></div>
+        </dl>
+      </li>
+
+    </ul>
+  </div>
+
+  <section class="recap">
+    <h2>Les réflexes pour l'examen</h2>
+    <ol>
+      <li>Fichier &gt; 5 GB → multipart obligatoire. Dès 100 MB → multipart recommandé.</li>
+      <li>Modifier un bout d'objet → impossible, on réécrit l'objet entier.</li>
+      <li>Supprimé par erreur avec versioning → retirer le delete marker.</li>
+      <li>Versioning ne se désactive pas, il se suspend.</li>
+      <li>Deny explicite quelque part → toujours refusé.</li>
+      <li>Autre compte AWS doit accéder → bucket policy + Allow IAM côté B.</li>
+      <li>Bucket policy publique sans effet → Block Public Access activé.</li>
+      <li>Accès temporaire à un objet sans créer d'user IAM → presigned URL.</li>
+      <li>Presigned URL qui expire trop tôt → signée avec des credentials temporaires.</li>
+      <li>Audit de qui a utilisé la clé → SSE-KMS.</li>
+      <li>AccessDenied sur un objet SSE-KMS malgré les droits S3 → manque <code>kms:Decrypt</code>.</li>
+      <li>Throttling KMS sur S3 → S3 Bucket Key.</li>
+      <li>Clé hors d'AWS mais chiffrement par AWS → SSE-C.</li>
+      <li>AWS ne doit jamais voir les données en clair → client-side.</li>
+      <li>Erreur CORS dans le navigateur → configurer CORS sur le bucket.</li>
+      <li>Site en HTTPS → CloudFront, pas le website endpoint.</li>
+      <li>Déclencher un traitement à l'upload → S3 event → Lambda / SQS / SNS.</li>
+      <li>Ressource <code>arn:aws:s3:::bucket</code> ≠ <code>bucket/*</code> : ListBucket vise le bucket, GetObject vise les objets.</li>
+      <li>SSE-S3 ne protège pas contre un accès IAM trop large : ce sont les permissions qui protègent.</li>
+    </ol>
+  </section>
+</div>
