@@ -1,0 +1,727 @@
+<title>Carte mentale DynamoDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: arbre (racine à gauche, colonne vertébrale, 9 branches empilées) ; contenu des branches en 2 colonnes sur grand écran, arbre vertical sur mobile */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --fg: #16211f;
+  --muted: #5a6864;
+  --line: #b9c6c2;
+  --accent: #0f6b5c;
+  --accent-soft: #dcefe9;
+  --trap: #9a4b00;
+  --trap-soft: #fdebd7;
+  --new: #2e4fa8;
+  --new-soft: #e2e8fa;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1614; --surface: #17211e; --fg: #e3ece9; --muted: #93a39e; --line: #33443f;
+    --accent: #5cc7b0; --accent-soft: #173a33; --trap: #f0a95c; --trap-soft: #3a2712;
+    --new: #93acf5; --new-soft: #1c2645; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1614; --surface: #17211e; --fg: #e3ece9; --muted: #93a39e; --line: #33443f;
+  --accent: #5cc7b0; --accent-soft: #173a33; --trap: #f0a95c; --trap-soft: #3a2712;
+  --new: #93acf5; --new-soft: #1c2645; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 32px 16px 56px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 28px; }
+h1 { font-family: var(--f-display); font-weight: 800; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h1 small { display: block; font-family: var(--f-body); font-weight: 500; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; color: var(--muted); }
+.tag { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 7px; border-radius: 4px; vertical-align: 1px; white-space: nowrap; }
+.tag.trap { background: var(--trap-soft); color: var(--trap); }
+.tag.new { background: var(--new-soft); color: var(--new); }
+code { font-family: var(--f-mono); font-size: 12px; background: var(--accent-soft); color: var(--fg); padding: 0 4px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 6px 0 2px; background: var(--accent-soft); border-radius: 6px; padding: 8px 10px; overflow-x: auto; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+abbr { text-decoration: none; border-bottom: 1px dotted var(--muted); cursor: help; }
+
+/* ---- Arbre ---- */
+.map { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: start; }
+.root { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--accent); color: var(--bg); border-radius: 14px; padding: 22px 16px; text-align: center; }
+.root b { display: block; font-family: var(--f-display); font-size: 34px; font-weight: 800; line-height: 1; }
+.root span { font-size: 12px; opacity: .9; }
+.branches { list-style: none; margin: 0 0 0 28px; padding: 0 0 0 28px; border-left: 2px solid var(--line); display: grid; gap: 14px; }
+.branch { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 14px; min-width: 0; }
+.branch::before { content: ""; position: absolute; left: -29px; top: 24px; width: 28px; border-top: 2px solid var(--line); }
+.branch.focus { border-color: var(--accent); border-width: 1.5px; }
+.branch h2 { font-family: var(--f-display); font-weight: 600; font-size: 19px; margin: 0 0 10px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.branch h2 .n { font-family: var(--f-mono); font-size: 11px; color: var(--accent); font-weight: 500; }
+.branch h2 .sub { font-family: var(--f-body); font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.branch h3 { font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+.cols { columns: 2 320px; column-gap: 32px; }
+.blk { break-inside: avoid; margin-bottom: 14px; }
+.blk:last-child { margin-bottom: 0; }
+.branch ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.branch li { position: relative; padding-left: 14px; }
+.branch li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.branch li ul { margin-top: 4px; gap: 3px; }
+.branch li li { color: var(--muted); }
+.branch li li::before { background: none; border: 1.5px solid var(--line); width: 5px; height: 5px; }
+.branch li.trap::before { background: var(--trap); border-radius: 1px; transform: rotate(45deg); }
+.branch li.new::before { background: var(--new); }
+.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+p.note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+/* schéma enveloppe */
+.env { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; margin: 4px 0 6px; }
+.env span { border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; background: var(--bg); }
+.env span.k { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.env i { color: var(--muted); font-style: normal; }
+
+/* tableaux */
+.tbl { overflow-x: auto; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+td:first-child { white-space: nowrap; }
+
+/* glossaire */
+.gloss { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 20px; margin: 0; }
+.gloss div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.gloss dt { font-family: var(--f-mono); font-weight: 500; color: var(--accent); font-size: 12.5px; }
+.gloss dd { margin: 0; font-size: 12.5px; }
+.gloss dd em { color: var(--muted); font-style: normal; }
+
+.recap { margin-top: 28px; background: var(--trap-soft); border-radius: 12px; padding: 18px 20px; }
+.recap h2 { font-family: var(--f-display); font-size: 20px; margin: 0 0 10px; color: var(--trap); }
+.recap ol { margin: 0; padding-left: 22px; columns: 2 320px; column-gap: 32px; }
+.recap li { margin-bottom: 5px; break-inside: avoid; }
+
+@media (max-width: 720px) {
+  .map { grid-template-columns: minmax(0, 1fr); }
+  .root { position: relative; top: 0; }
+  .root::after { content: ""; position: absolute; left: 28px; bottom: -20px; height: 20px; border-left: 2px solid var(--line); }
+  .branches { margin: 20px 0 0 28px; padding-left: 16px; }
+  .branch { padding: 12px 14px; }
+  .branch::before { left: -17px; width: 16px; }
+}
+.root b { font-size: 25px; letter-spacing: -0.01em; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><small>AWS DVA-C02 · DynamoDB</small>Amazon DynamoDB, carte mentale</h1>
+    <div class="legend">
+      <span><span class="tag trap">Piège</span> classique à l'examen</span>
+      <span><span class="tag new">Précision</span> corrige ou complète tes notes</span>
+      <span>Sigles soulignés en pointillé : voir le glossaire en bas</span>
+    </div>
+  </header>
+
+  <div class="map">
+    <div class="root"><b>DynamoDB</b><span>NoSQL clé-valeur et document</span></div>
+
+    <ul class="branches">
+
+      <!-- 01 -->
+      <li class="branch">
+        <h2><span class="n">01</span>Fondamentaux</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li>Base <b>NoSQL clé-valeur et document</b>, entièrement managée et <b>serverless</b> (aucun serveur à gérer)</li>
+            <li>Scale <b>horizontalement</b> et automatiquement</li>
+            <li>Supporte <b><abbr title="Atomicité, Cohérence, Isolation, Durabilité">ACID</abbr></b> grâce aux transactions</li>
+            <li>Facturation : <b>on-demand</b> (par requête) ou <b>provisioned</b> (capacité réservée)</li>
+            <li class="trap"><span class="tag trap">Piège</span> Pas de jointures : les données sont <b>dénormalisées</b>, dupliquées volontairement</li>
+            <li>Côté AWS : RDS pour le relationnel ; DynamoDB, ElastiCache, Neptune pour le non relationnel</li>
+          </ul></div>
+          <div class="blk">
+            <div class="tbl"><table>
+              <thead><tr><th></th><th>Relationnelle</th><th>NoSQL</th></tr></thead>
+              <tbody>
+                <tr><td>Exemples</td><td>SQL Server, Oracle</td><td>Redis, MongoDB, DynamoDB</td></tr>
+                <tr><td>Schéma</td><td>Strict, défini d'avance</td><td>Flexible, dynamique</td></tr>
+                <tr><td>Scaling</td><td>Vertical (serveur plus gros)</td><td>Horizontal (plus de nœuds)</td></tr>
+                <tr><td>Choisir si</td><td>Schéma strict, requêtes complexes, pas de perf R/W extrême</td><td>Scale horizontal, paires clé-valeur, schéma dynamique, très gros débit</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
+      </li>
+
+      <!-- 02 -->
+      <li class="branch">
+        <h2><span class="n">02</span>Composants et types de données</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li><b>Table</b> = collection d'items (≈ table SQL, sans schéma fixe)</li>
+            <li><b>Item</b> = un enregistrement (≈ ligne), un ensemble d'attributs</li>
+            <li><b>Attribut</b> = un champ (≈ colonne)
+              <ul><li>Un item peut avoir des attributs qu'un autre item de la même table n'a pas</li></ul>
+            </li>
+            <li>Seule la clé primaire est obligatoire</li>
+            <li class="trap"><span class="tag trap">Piège</span> Taille max d'un item : <span class="num">400 KB</span> (noms + valeurs d'attributs)</li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li><b>Scalaires</b> (une seule valeur) : String, Number, Binary, Boolean, Null</li>
+            <li><b>Sets</b> (plusieurs valeurs scalaires du même type) : String Set, Number Set, Binary Set</li>
+            <li><b>Documents</b> (structures imbriquées type JSON) : List, Map</li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 03 -->
+      <li class="branch">
+        <h2><span class="n">03</span>Clés primaires et partitionnement</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li><b>Clé simple</b> : <b>partition key</b> seule (hash attribute), unique pour chaque item</li>
+            <li><b>Clé composite</b> : partition key + <b>sort key</b>
+              <ul>
+                <li>La partition key seule peut se répéter</li>
+                <li>La combinaison PK + SK doit être <b>unique</b></li>
+              </ul>
+            </li>
+            <li>Pas d'auto-incrément : on utilise un UUID ou un ID applicatif</li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li>La <b>valeur hashée</b> de la PK décide de la partition (allocation de stockage)</li>
+            <li>Items de même PK stockés <b>ensemble</b>, triés par SK
+              <ul><li>Un <code>Query</code> sur une PK lit un bloc contigu : c'est ce qui le rend rapide</li></ul>
+            </li>
+            <li class="trap"><span class="tag trap">Piège</span> <b>Hot partition</b> : une PK qui reçoit trop de trafic limite tout, même si la table est sous sa capacité
+              <ul><li>Bonne PK = forte cardinalité, trafic réparti</li></ul>
+            </li>
+            <li class="new"><span class="tag new">Précision</span> « Chaque valeur de PK a sa propre partition » est une simplification : plusieurs valeurs peuvent partager une partition physique (limite ≈ 10 GB, 3 000 RCU, 1 000 WCU par partition)</li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 04 INDEX -->
+      <li class="branch focus">
+        <h2><span class="n">04</span>Index secondaires<span class="sub">chercher autrement que par la clé primaire</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Pourquoi</h3>
+            <ul>
+              <li>Sans index, on ne cherche que par la clé primaire</li>
+              <li>Un index définit une <b>clé alternative</b> pour interroger sur un autre attribut</li>
+              <li>Pour l'utiliser : <code>Query</code> avec <code>IndexName</code></li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>GSI contre LSI</h3>
+            <div class="tbl"><table>
+              <thead><tr><th></th><th><abbr title="Global Secondary Index">GSI</abbr></th><th><abbr title="Local Secondary Index">LSI</abbr></th></tr></thead>
+              <tbody>
+                <tr><td>Portée</td><td>Au-delà de la partition (toutes les partitions)</td><td>Dans la même partition</td></tr>
+                <tr><td>Clés</td><td>PK et SK <b>différentes</b> de la table</td><td><b>Même PK</b>, SK différente</td></tr>
+                <tr><td>Débit</td><td>RCU/WCU <b>propres</b></td><td>Partagé avec la table</td></tr>
+                <tr><td>Taille</td><td>Pas de limite</td><td><span class="num">10 GB</span> par valeur de PK</td></tr>
+                <tr><td>Création</td><td>À tout moment</td><td><b>Seulement à la création</b> de la table</td></tr>
+                <tr><td>Maximum</td><td><span class="num">20</span> par table</td><td><span class="num">5</span> par table</td></tr>
+                <tr><td>Lecture</td><td><b>Eventually</b> consistent seulement</td><td>Supporte <b>strongly</b> consistent</td></tr>
+              </tbody>
+            </table></div>
+            <p class="note">Un LSI enferme les données d'une PK dans une seule partition (10 GB max). Si ça peut déborder, il faut prévoir un GSI dès le design.</p>
+          </div>
+
+          <div class="blk">
+            <h3>Projection : quoi copier dans l'index</h3>
+            <ul>
+              <li><b>KEYS_ONLY</b> : seulement les clés</li>
+              <li><b>INCLUDE</b> : clés + attributs choisis</li>
+              <li><b>ALL</b> : tous les attributs</li>
+              <li>Bonne pratique : projeter le minimum (moins de coût et de latence)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Choisir la clé d'un GSI</h3>
+            <ul>
+              <li>Un GSI regroupe des items venant de partitions différentes. Exemple : <code>status</code> (LEGIT / FRAUD / PENDING) permet « tous les items avec status = X, tous users confondus », impossible avec la PK/SK de la table</li>
+              <li>La SK du GSI (ex. <code>created_at</code>) trie chaque groupe. Une SK qui varie par item est normale</li>
+              <li class="new"><span class="tag new">Précision</span> Une PK de GSI à très peu de valeurs concentre les écritures et peut créer une <b>hot partition</b>
+                <ul>
+                  <li>Un GSI en <b>throttling</b> fait aussi throttler les écritures de la table de base</li>
+                  <li>Parade : ajouter un suffixe de sharding ou combiner la valeur avec une date</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Sparse index</h3>
+            <ul>
+              <li>Seuls les items qui <b>possèdent</b> l'attribut clé de l'index y apparaissent</li>
+              <li>Utile pour un index léger : ne remplir l'attribut que quand <code>status = PAID</code></li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 05 -->
+      <li class="branch">
+        <h2><span class="n">05</span>Opérations de l'API</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>Les 4 catégories</h3>
+            <ul>
+              <li><b>Contrôle</b> : créer et gérer les tables (<code>CreateTable</code> : nom, schéma de clés, définition des attributs, débit provisionné)</li>
+              <li><b>Données</b> (<abbr title="Create, Read, Update, Delete">CRUD</abbr>) : <code>PutItem</code>, <code>GetItem</code>, <code>UpdateItem</code>, <code>DeleteItem</code>, <code>Query</code>, <code>Scan</code></li>
+              <li><b>Batch</b> : <code>BatchGetItem</code>, <code>BatchWriteItem</code></li>
+              <li><b>Transaction</b> : <code>TransactWriteItems</code>, <code>TransactGetItems</code>, changements coordonnés, tout ou rien, sur une ou plusieurs tables</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>Lire</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Opération</th><th>Clé requise</th><th>Rôle</th></tr></thead>
+              <tbody>
+                <tr><td><code>GetItem</code></td><td>Clé primaire <b>complète</b> (PK + SK si composite)</td><td>Un seul item. Eventually consistent par défaut</td></tr>
+                <tr><td><code>Query</code></td><td><b>PK obligatoire</b> (+ condition sur la SK)</td><td>Tous les items d'une PK. Plus efficace que Scan. Table ou index</td></tr>
+                <tr><td><code>Scan</code></td><td>Aucune</td><td>Parcourt toute la table ou l'index. Coûteux, à éviter en prod</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+          <div class="blk">
+            <h3>Écrire</h3>
+            <ul>
+              <li><code>DeleteItem</code> : supprime un item par sa clé primaire</li>
+              <li><b>Condition Expressions</b> : s'appliquent aux écritures, l'opération n'a lieu que si la condition est vraie</li>
+              <li>Ajouter un attribut plus tard à un item existant : <code>UpdateItem</code>, sans migration</li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 06 -->
+      <li class="branch">
+        <h2><span class="n">06</span>Cohérence de lecture et transactions</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>Cohérence</h3>
+            <ul>
+              <li>Les données sont copiées sur plusieurs serveurs : la synchronisation prend environ <span class="num">1 s</span>, d'où un possible décalage à la lecture</li>
+              <li><b>Eventually consistent</b> (défaut) : peut renvoyer une valeur périmée, <span class="num">0,5</span> RCU par 4 KB, moins cher</li>
+              <li><b>Strongly consistent</b> : reflète la dernière écriture confirmée, <span class="num">1</span> RCU par 4 KB, plus cher
+                <ul><li>Paramètre <code>ConsistentRead = true</code></li></ul>
+              </li>
+              <li class="trap"><span class="tag trap">Piège</span> Un <b>GSI</b> ne fait que de l'eventually consistent. Un LSI et la table peuvent faire du strongly</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>Transactions ACID</h3>
+            <ul>
+              <li><code>TransactWriteItems</code> : Put / Update / Delete, avec éventuelles conditions, en un bloc tout ou rien</li>
+              <li><code>TransactGetItems</code> : plusieurs lectures cohérentes ensemble</li>
+              <li>Si une opération ou une condition échoue, <b>toute la transaction est rejetée</b>, rien n'est appliqué à moitié</li>
+              <li>Coût doublé par rapport à une opération normale (voir branche 13)</li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 07 DEBIT -->
+      <li class="branch focus">
+        <h2><span class="n">07</span>Débit et capacité<span class="sub">RCU, WCU et choix du mode</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Les 2 modes</h3>
+            <ul>
+              <li><b>Provisioned</b> : tu fixes les RCU et WCU à l'avance. Moins cher pour un trafic stable, élevé et prévisible</li>
+              <li><b>On-demand</b> : DynamoDB s'adapte tout seul, facturé à la requête. Idéal pour un trafic imprévisible ou en pics, ou sans envie de planifier
+                <ul><li>Les unités s'appellent <abbr title="Read Request Unit / Write Request Unit">RRU / WRU</abbr>, mêmes tailles (4 KB / 1 KB)</li></ul>
+              </li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Définitions</h3>
+            <ul>
+              <li><b><abbr title="Read Capacity Unit">RCU</abbr></b> = 1 lecture <b>strongly</b> consistent par seconde pour <span class="num">4 KB</span> (ou 2 lectures eventually)</li>
+              <li><b><abbr title="Write Capacity Unit">WCU</abbr></b> = 1 écriture par seconde pour <span class="num">1 KB</span></li>
+              <li>3 infos pour calculer : nombre d'opérations par seconde, taille moyenne des items, type de cohérence</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Formules</h3>
+<pre><code>RCU strongly   = arrondi↑(taille ÷ 4 KB) × lectures/s
+RCU eventually = arrondi↑(taille ÷ 4 KB) × lectures/s ÷ 2
+WCU            = arrondi↑(taille ÷ 1 KB) × écritures/s</code></pre>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> On arrondit <b>toujours la taille au supérieur</b> avant de multiplier</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Exemples</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Cas</th><th>Calcul</th><th>Résultat</th></tr></thead>
+              <tbody>
+                <tr><td>4 KB, strongly, 30 lectures/s</td><td>1 × 30</td><td><b>30 RCU</b></td></tr>
+                <tr><td>4 KB, eventually, 30 lectures/s</td><td>1 × 30 ÷ 2</td><td><b>15 RCU</b></td></tr>
+                <tr><td>6 KB, strongly, 10 lectures/s</td><td>2 × 10</td><td><b>20 RCU</b></td></tr>
+                <tr><td>8 KB, strongly, 1 lecture/s</td><td>2 × 1</td><td><b>2 RCU</b></td></tr>
+                <tr><td>1 KB, 14 écritures/s</td><td>1 × 14</td><td><b>14 WCU</b></td></tr>
+                <tr><td>2,5 KB, 10 écritures/s</td><td>3 × 10</td><td><b>30 WCU</b></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="blk">
+            <h3>En production</h3>
+            <ul>
+              <li>Démarrer en <b>on-demand</b></li>
+              <li>Observer environ <span class="num">2 semaines</span> dans CloudWatch : RCU/s, WCU/s, taille des items</li>
+              <li>Si le trafic est prévisible, passer en <b>provisioned</b></li>
+              <li>Demande qui explose → erreur <b>400</b> (<code>ProvisionedThroughputExceededException</code>) → <b>Auto Scaling</b> ou retour en on-demand</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 08 -->
+      <li class="branch">
+        <h2><span class="n">08</span>Streams</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li>Flux, dans l'ordre chronologique, de toutes les modifications d'une table : <b>insert, update, delete</b></li>
+            <li class="trap"><span class="tag trap">Piège</span> Conservé <span class="num">24 h</span> seulement</li>
+            <li>Option à activer sur la table</li>
+            <li>Chaque modification produit un <b>stream record</b> : le changement, qu'une application peut lire pour réagir
+              <ul>
+                <li>Type d'événement : <code>INSERT</code>, <code>MODIFY</code>, <code>REMOVE</code></li>
+                <li>Un <code>SequenceNumber</code> garde l'ordre</li>
+                <li>Les records sont regroupés en <b>shards</b></li>
+              </ul>
+            </li>
+          </ul></div>
+          <div class="blk">
+            <h3>Les 4 types de vue</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Type</th><th>Contenu du record</th></tr></thead>
+              <tbody>
+                <tr><td><code>KEYS_ONLY</code></td><td>Les clés de l'item modifié</td></tr>
+                <tr><td><code>NEW_IMAGE</code></td><td>L'item après modification</td></tr>
+                <tr><td><code>OLD_IMAGE</code></td><td>L'item avant modification</td></tr>
+                <tr><td><code>NEW_AND_OLD_IMAGES</code></td><td>Les deux</td></tr>
+              </tbody>
+            </table></div>
+            <h3 style="margin-top:10px">Usages</h3>
+            <ul>
+              <li>Déclencher une <b>Lambda</b> à chaque écriture (event-driven)</li>
+              <li>Réplication (base des Global Tables)</li>
+              <li>Audit, synchronisation entre systèmes, Kinesis</li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 09 -->
+      <li class="branch">
+        <h2><span class="n">09</span>Global Tables</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li>Table répliquée <b>automatiquement</b> dans plusieurs régions AWS, une réplique par région, copie identique, via les <b>Streams</b></li>
+            <li>Base <b>multi-région et multi-active</b> : lecture et écriture dans chaque région, sans construire sa propre réplication</li>
+            <li>On choisit les régions où la table doit être disponible</li>
+            <li>Mise à jour propagée en quelques secondes</li>
+            <li>Conflit (même item écrit dans 2 régions) : <b>last writer wins</b>, selon l'horodatage</li>
+            <li class="trap"><span class="tag trap">Piège</span> Lecture <b>strongly consistent</b> seulement dans la région où l'écriture a eu lieu ; entre régions, c'est eventually</li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li class="new"><span class="tag new">Précision</span> Les transactions ACID ne valent que <b>dans la région</b> où elles s'exécutent, pas d'une région à l'autre</li>
+            <li class="new"><span class="tag new">Précision</span> Depuis 2025, mode optionnel <b>MRSC</b> (<i>multi-Region strong consistency</i>) : lectures fortes entre régions, aucune perte de données (RPO zéro)
+              <ul><li>Le mode par défaut, <b>MREC</b> (<i>eventual consistency</i>), garde le last writer wins</li></ul>
+            </li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 10 -->
+      <li class="branch">
+        <h2><span class="n">10</span>Sauvegarde et restauration</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>Backup on-demand</h3>
+            <ul>
+              <li>Sauvegarde <b>complète</b> de la table, pour la rétention longue durée et la conformité</li>
+              <li>Asynchrone, <b>aucune limite</b> de nombre, <b>n'affecte pas</b> le débit de la table</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>PITR (Point-in-time recovery)</h3>
+            <ul>
+              <li>Sauvegarde continue, rien à planifier</li>
+              <li>Restaure la table à <b>n'importe quel moment des <span class="num">35</span> derniers jours</b></li>
+              <li>Protège contre une écriture ou suppression accidentelle (ex. un script de test lancé sur la prod)</li>
+              <li class="trap"><span class="tag trap">Piège</span> Désactivé par défaut, à activer table par table</li>
+            </ul>
+          </div>
+          <div class="blk"><ul>
+            <li class="trap"><span class="tag trap">Piège</span> Toute restauration crée une <b>nouvelle table</b>, elle n'écrase jamais la source</li>
+            <li>Backup et restauration se déclenchent depuis la console, la CLI ou l'API</li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 11 SINGLE TABLE -->
+      <li class="branch focus">
+        <h2><span class="n">11</span>Conception single-table<span class="sub">partir des requêtes, puis dessiner les clés</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Démarche</h3>
+            <ul>
+              <li><b>Access patterns d'abord</b> : quelles requêtes l'application fait vraiment ? Les clés sont conçues pour les servir</li>
+              <li><b>Single-table</b> : plusieurs types d'entités dans une seule table (ex. profil d'un user et ses transactions)</li>
+              <li>Avantage : profil <b>et</b> transactions en un seul <code>Query</code>, sans jointure ni aller-retour multiple</li>
+              <li>Coût : plus d'effort de design au départ</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Les clés</h3>
+<pre><code>PK : USER#&lt;user_id&gt;
+SK : PROFILE
+SK : TXN#&lt;timestamp ISO 8601&gt;#&lt;id&gt;</code></pre>
+            <ul>
+              <li>PK partagée : tout ce qui appartient à un user est dans la <b>même partition</b></li>
+              <li>Le préfixe <code>USER#</code> évite les collisions avec une autre entité qui réutiliserait le même ID</li>
+              <li><code>PROFILE</code> : valeur fixe, il n'y en a qu'un par user</li>
+              <li><code>TXN#...</code> : valeur variable, un user en accumule beaucoup</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Pourquoi cet ordre dans la SK</h3>
+            <ul>
+              <li><b>Timestamp ISO 8601 en premier</b> : l'ordre alphabétique égale l'ordre chronologique, donc un <code>Query</code> renvoie les items triés sans tri côté client</li>
+              <li><b>ID à la fin</b> : garantit l'unicité même si deux items naissent à la même milliseconde (départage)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>GSI <code>status-index</code></h3>
+<pre><code>GSI partition key : status
+GSI sort key      : created_at</code></pre>
+            <ul>
+              <li>Permet « tous les items avec status = X », tous users confondus</li>
+              <li><code>created_at</code> trie chronologiquement dans chaque groupe</li>
+              <li>Un GSI s'ajoute après coup, un LSI non</li>
+              <li class="new"><span class="tag new">Précision</span> Voir la mise en garde sur les clés de GSI à faible cardinalité (branche 04)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Sans schéma, et relations</h3>
+            <ul>
+              <li>Un attribut s'ajoute plus tard avec <code>UpdateItem</code>, sans migration (contrairement à <code>ALTER TABLE</code>)</li>
+              <li>Principe du minimum : pas de nom ni d'email dans le profil si un fournisseur d'identité les gère déjà</li>
+              <li><b>Many-to-many</b> : un item de relation dont la SK sert de PK au GSI (et inversement), interrogeable dans les deux sens</li>
+              <li class="trap"><span class="tag trap">Piège</span> Hot partition aussi ici : un user extrêmement actif peut saturer sa partition</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 12 DEBUG -->
+      <li class="branch">
+        <h2><span class="n">12</span>Déboguer une Lambda qui utilise DynamoDB</h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Où regarder</h3>
+            <ul>
+              <li>Une Lambda n'a pas de terminal : ses <code>print</code> et exceptions n'apparaissent que dans <b>CloudWatch Logs</b></li>
+              <li>Un groupe de logs par fonction : <code>/aws/lambda/&lt;nom-fonction&gt;</code>, un log stream par invocation</li>
+              <li>Démarche : erreur côté client (API Gateway cache tout derrière un « Internal server error » générique) → groupe de logs → stack trace → correction → redéploiement → test</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Piège 1 : <code>Decimal</code> non sérialisable</h3>
+            <ul>
+              <li><code>boto3.resource</code> renvoie les nombres en <code>Decimal</code> (Query, Scan, GetItem) pour garder la précision</li>
+              <li><code>json.dumps</code> plante : <code>TypeError: Object of type Decimal is not JSON serializable</code></li>
+            </ul>
+<pre><code>from decimal import Decimal
+
+def decimal_default(obj):
+    if isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    raise TypeError(f"{type(obj)} non sérialisable")
+
+json.dumps(data, default=decimal_default)</code></pre>
+            <ul>
+              <li>Utile seulement dans les fonctions qui <b>lisent</b>. Une fonction qui n'écrit que (<code>put_item</code>) n'en a pas besoin, et l'ajouter sans la définir donne un <code>NameError</code></li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Piège 2 : import oublié</h3>
+            <ul>
+              <li>Utiliser <code>Decimal</code> sans <code>from decimal import Decimal</code> donne <code>NameError: name 'Decimal' is not defined</code>, une erreur qui semble sans rapport avec le bug d'origine</li>
+              <li>Réflexe : quand un code référence un type, vérifier son import</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Piège 3 : CORS avec Lambda proxy</h3>
+            <ul>
+              <li>La requête réussit côté serveur (<code>200</code>) mais le navigateur la bloque</li>
+              <li>Le bloc <code>Cors</code> du template SAM ne génère les en-têtes que pour la réponse <b>OPTIONS</b> (preflight), pas pour la vraie réponse</li>
+              <li>La Lambda doit renvoyer elle-même les en-têtes CORS, sur <b>tous</b> ses chemins, erreurs comprises</li>
+              <li class="trap"><span class="tag trap">Piège</span> Un preflight réussi ne prouve pas que la vraie requête passera</li>
+            </ul>
+<pre><code>return {
+  "statusCode": status_code,
+  "headers": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+  },
+  "body": json.dumps(data)
+}</code></pre>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 13 HORS NOTES -->
+      <li class="branch">
+        <h2><span class="n">13</span>Hors de tes notes<span class="sub">à connaître pour le DVA-C02</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Lire sans gaspiller</h3>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> <code>Query</code> et <code>Scan</code> renvoient au max <span class="num">1 MB</span> par appel : paginer avec <code>LastEvaluatedKey</code> → <code>ExclusiveStartKey</code></li>
+              <li><code>KeyConditionExpression</code> : PK <code>=</code> et SK (<code>begins_with</code>, <code>between</code>, <code>&lt;</code>, <code>&gt;</code>)</li>
+              <li class="trap"><code>FilterExpression</code> s'applique <b>après</b> la lecture : les RCU sont consommés pour tous les items lus, pas seulement ceux gardés</li>
+              <li><code>ProjectionExpression</code> réduit ce qui est renvoyé, pas le coût de lecture</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Écrire en sécurité</h3>
+            <ul>
+              <li><code>ConditionExpression</code> (ex. <code>attribute_not_exists(PK)</code>) : si fausse, <code>ConditionalCheckFailedException</code></li>
+              <li><b>Compteur atomique</b> : <code>UpdateItem</code> avec <code>SET n = n + :inc</code></li>
+              <li><b>Verrouillage optimiste</b> : attribut <code>version</code> et condition <code>version = :v</code> à l'écriture, pour éviter les écrasements concurrents</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Batch et transactions : limites</h3>
+            <ul>
+              <li><code>BatchWriteItem</code> : <span class="num">25</span> Put/Delete max (pas d'Update), 16 MB</li>
+              <li><code>BatchGetItem</code> : <span class="num">100</span> items max, 16 MB</li>
+              <li>Items refusés → <code>UnprocessedItems</code> à relancer avec <b>exponential backoff</b></li>
+              <li>Transaction : max <span class="num">100</span> actions, 4 MB</li>
+              <li class="trap"><span class="tag trap">Piège</span> Une opération transactionnelle coûte <b>2×</b> : 2 RCU par 4 KB lus, 2 WCU par 1 KB écrit</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Erreurs et capacité</h3>
+            <ul>
+              <li><code>ProvisionedThroughputExceededException</code> (400) → retry avec <b>exponential backoff</b> (les SDK le font seuls) ; les erreurs 5xx aussi</li>
+              <li><b>Auto Scaling</b> : ajuste les RCU/WCU provisionnés autour d'une utilisation cible (ex. 70 %)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>TTL</h3>
+            <ul>
+              <li>Un attribut <b>Number</b> en secondes epoch : une fois dépassé, l'item est supprimé</li>
+              <li>Suppression en arrière-plan, pas instantanée (quelques heures à quelques jours)</li>
+              <li>Gratuite (aucun WCU consommé), et visible dans les Streams</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>DAX</h3>
+            <ul>
+              <li>Cache <b>en mémoire</b> devant DynamoDB, latence en <b>microsecondes</b>, compatible avec l'API DynamoDB</li>
+              <li>Pour les lectures répétées et les points chauds</li>
+              <li class="trap"><span class="tag trap">Piège</span> Sert les lectures eventually consistent ; une lecture strongly consistent le contourne</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Divers</h3>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> Item &gt; 400 KB impossible : stocker le gros contenu dans <b>S3</b> et garder la référence dans DynamoDB</li>
+              <li><b>PartiQL</b> : requêtes de style SQL sur DynamoDB</li>
+              <li><b>Export vers S3</b> (depuis PITR), sans consommer de capacité de lecture</li>
+              <li>Classes de table : <b>Standard</b> et <b>Standard-IA</b> (données rarement lues)</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 14 GLOSSAIRE -->
+      <li class="branch">
+        <h2><span class="n">14</span>Glossaire des sigles</h2>
+        <dl class="gloss">
+          <div><dt>ACID</dt><dd>Atomicité, Cohérence, Isolation, Durabilité</dd></div>
+          <div><dt>CRUD</dt><dd>Create, Read, Update, Delete</dd></div>
+          <div><dt>PK</dt><dd>Partition Key <em>(clé de partition, hash)</em></dd></div>
+          <div><dt>SK</dt><dd>Sort Key <em>(clé de tri)</em></dd></div>
+          <div><dt>GSI</dt><dd>Global Secondary Index</dd></div>
+          <div><dt>LSI</dt><dd>Local Secondary Index</dd></div>
+          <div><dt>RCU</dt><dd>Read Capacity Unit <em>(provisioned)</em></dd></div>
+          <div><dt>WCU</dt><dd>Write Capacity Unit <em>(provisioned)</em></dd></div>
+          <div><dt>RRU</dt><dd>Read Request Unit <em>(on-demand)</em></dd></div>
+          <div><dt>WRU</dt><dd>Write Request Unit <em>(on-demand)</em></dd></div>
+          <div><dt>PITR</dt><dd>Point-in-time recovery <em>(35 jours)</em></dd></div>
+          <div><dt>TTL</dt><dd>Time To Live <em>(expiration automatique des items)</em></dd></div>
+          <div><dt>DAX</dt><dd>DynamoDB Accelerator <em>(cache en mémoire)</em></dd></div>
+          <div><dt>MREC</dt><dd>Multi-Region Eventual Consistency <em>(mode par défaut des Global Tables)</em></dd></div>
+          <div><dt>MRSC</dt><dd>Multi-Region Strong Consistency <em>(mode optionnel)</em></dd></div>
+          <div><dt>SAM</dt><dd>Serverless Application Model</dd></div>
+          <div><dt>CORS</dt><dd>Cross-Origin Resource Sharing</dd></div>
+          <div><dt>ISO</dt><dd>ISO 8601 : date <code>AAAA-MM-JJThh:mm:ssZ</code>, triable alphabétiquement</dd></div>
+        </dl>
+      </li>
+
+    </ul>
+  </div>
+
+  <section class="recap">
+    <h2>Les réflexes pour l'examen</h2>
+    <ol>
+      <li>Chercher par un attribut qui n'est pas la clé → index secondaire (GSI, ou LSI si même PK avec une autre SK).</li>
+      <li>Index à ajouter sur une table déjà créée → GSI. Un LSI se définit à la création.</li>
+      <li>Lecture strongly consistent sur un index → LSI seulement. Un GSI est toujours eventually.</li>
+      <li>Lecture à jour obligatoire → <code>ConsistentRead = true</code> (1 RCU / 4 KB). Défaut : eventually (0,5 RCU).</li>
+      <li>Calcul RCU / WCU → arrondir la taille au supérieur (4 KB / 1 KB), eventually = ÷ 2.</li>
+      <li>Transaction → coût ×2, tout ou rien.</li>
+      <li>Scan à éviter. Utiliser Query avec la PK, ou Query sur un index.</li>
+      <li>FilterExpression ne réduit pas les RCU consommés.</li>
+      <li>Hot partition → PK à forte cardinalité, trafic réparti.</li>
+      <li>ProvisionedThroughputExceededException (400) → exponential backoff, Auto Scaling ou on-demand.</li>
+      <li>Trafic imprévisible → on-demand. Stable et prévisible → provisioned.</li>
+      <li>Réagir à chaque écriture → Streams + Lambda (24 h de rétention).</li>
+      <li>Multi-région, multi-active → Global Tables (last writer wins).</li>
+      <li>Erreur accidentelle sur la prod → PITR (35 jours), qui crée une nouvelle table.</li>
+      <li>Expirer des données automatiquement → TTL.</li>
+      <li>Cache en microsecondes devant DynamoDB → DAX.</li>
+      <li>Item &gt; 400 KB → S3 pour le contenu, référence dans DynamoDB.</li>
+      <li>Écrasements concurrents → écriture conditionnelle (verrouillage optimiste).</li>
+      <li>Lambda qui lit DynamoDB puis <code>json.dumps</code> → convertir les <code>Decimal</code>.</li>
+      <li>CORS avec Lambda proxy → en-têtes dans la réponse de la Lambda, pas seulement dans le preflight.</li>
+    </ol>
+  </section>
+</div>
