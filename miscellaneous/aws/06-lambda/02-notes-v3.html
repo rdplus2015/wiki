@@ -1,0 +1,746 @@
+<title>Carte mentale Lambda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: arbre (racine à gauche, colonne vertébrale, 9 branches empilées) ; contenu des branches en 2 colonnes sur grand écran, arbre vertical sur mobile */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --fg: #16211f;
+  --muted: #5a6864;
+  --line: #b9c6c2;
+  --accent: #0f6b5c;
+  --accent-soft: #dcefe9;
+  --trap: #9a4b00;
+  --trap-soft: #fdebd7;
+  --new: #2e4fa8;
+  --new-soft: #e2e8fa;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1614; --surface: #17211e; --fg: #e3ece9; --muted: #93a39e; --line: #33443f;
+    --accent: #5cc7b0; --accent-soft: #173a33; --trap: #f0a95c; --trap-soft: #3a2712;
+    --new: #93acf5; --new-soft: #1c2645; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1614; --surface: #17211e; --fg: #e3ece9; --muted: #93a39e; --line: #33443f;
+  --accent: #5cc7b0; --accent-soft: #173a33; --trap: #f0a95c; --trap-soft: #3a2712;
+  --new: #93acf5; --new-soft: #1c2645; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 32px 16px 56px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 28px; }
+h1 { font-family: var(--f-display); font-weight: 800; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h1 small { display: block; font-family: var(--f-body); font-weight: 500; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; color: var(--muted); }
+.tag { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 7px; border-radius: 4px; vertical-align: 1px; white-space: nowrap; }
+.tag.trap { background: var(--trap-soft); color: var(--trap); }
+.tag.new { background: var(--new-soft); color: var(--new); }
+code { font-family: var(--f-mono); font-size: 12px; background: var(--accent-soft); color: var(--fg); padding: 0 4px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 6px 0 2px; background: var(--accent-soft); border-radius: 6px; padding: 8px 10px; overflow-x: auto; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+abbr { text-decoration: none; border-bottom: 1px dotted var(--muted); cursor: help; }
+
+/* ---- Arbre ---- */
+.map { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: start; }
+.root { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--accent); color: var(--bg); border-radius: 14px; padding: 22px 16px; text-align: center; }
+.root b { display: block; font-family: var(--f-display); font-size: 34px; font-weight: 800; line-height: 1; }
+.root span { font-size: 12px; opacity: .9; }
+.branches { list-style: none; margin: 0 0 0 28px; padding: 0 0 0 28px; border-left: 2px solid var(--line); display: grid; gap: 14px; }
+.branch { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 14px; min-width: 0; }
+.branch::before { content: ""; position: absolute; left: -29px; top: 24px; width: 28px; border-top: 2px solid var(--line); }
+.branch.focus { border-color: var(--accent); border-width: 1.5px; }
+.branch h2 { font-family: var(--f-display); font-weight: 600; font-size: 19px; margin: 0 0 10px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.branch h2 .n { font-family: var(--f-mono); font-size: 11px; color: var(--accent); font-weight: 500; }
+.branch h2 .sub { font-family: var(--f-body); font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.branch h3 { font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+.cols { columns: 2 320px; column-gap: 32px; }
+.blk { break-inside: avoid; margin-bottom: 14px; }
+.blk:last-child { margin-bottom: 0; }
+.branch ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.branch li { position: relative; padding-left: 14px; }
+.branch li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.branch li ul { margin-top: 4px; gap: 3px; }
+.branch li li { color: var(--muted); }
+.branch li li::before { background: none; border: 1.5px solid var(--line); width: 5px; height: 5px; }
+.branch li.trap::before { background: var(--trap); border-radius: 1px; transform: rotate(45deg); }
+.branch li.new::before { background: var(--new); }
+.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+p.note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+/* schéma enveloppe */
+.env { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; margin: 4px 0 6px; }
+.env span { border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; background: var(--bg); }
+.env span.k { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.env i { color: var(--muted); font-style: normal; }
+
+/* tableaux */
+.tbl { overflow-x: auto; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+td:first-child { white-space: nowrap; }
+
+/* glossaire */
+.gloss { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 20px; margin: 0; }
+.gloss div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.gloss dt { font-family: var(--f-mono); font-weight: 500; color: var(--accent); font-size: 12.5px; }
+.gloss dd { margin: 0; font-size: 12.5px; }
+.gloss dd em { color: var(--muted); font-style: normal; }
+
+.recap { margin-top: 28px; background: var(--trap-soft); border-radius: 12px; padding: 18px 20px; }
+.recap h2 { font-family: var(--f-display); font-size: 20px; margin: 0 0 10px; color: var(--trap); }
+.recap ol { margin: 0; padding-left: 22px; columns: 2 320px; column-gap: 32px; }
+.recap li { margin-bottom: 5px; break-inside: avoid; }
+
+@media (max-width: 720px) {
+  .map { grid-template-columns: minmax(0, 1fr); }
+  .root { position: relative; top: 0; }
+  .root::after { content: ""; position: absolute; left: 28px; bottom: -20px; height: 20px; border-left: 2px solid var(--line); }
+  .branches { margin: 20px 0 0 28px; padding-left: 16px; }
+  .branch { padding: 12px 14px; }
+  .branch::before { left: -17px; width: 16px; }
+}
+.root b { font-size: 25px; letter-spacing: -0.01em; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><small>AWS DVA-C02 · Module 7</small>AWS Lambda, carte mentale</h1>
+    <div class="legend">
+      <span><span class="tag trap">Piège</span> classique à l'examen</span>
+      <span><span class="tag new">Précision</span> corrige ou complète tes notes</span>
+      <span>Sigles soulignés en pointillé : voir le glossaire en bas</span>
+    </div>
+  </header>
+
+  <div class="map">
+    <div class="root"><b>Lambda</b><span>Du code sans serveur, déclenché par des événements</span></div>
+
+    <ul class="branches">
+
+      <!-- 01 -->
+      <li class="branch">
+        <h2><span class="n">01</span>Serverless et Lambda</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>Pourquoi le serverless</h3>
+            <ul>
+              <li>Le cloud permet d'abstraire la couche infrastructure pour se concentrer sur la <b>logique métier</b></li>
+              <li>Niveaux d'abstraction : on-premises → serveurs virtuels → conteneurs → <b>serverless</b></li>
+              <li>Serveurs classiques : tu gères les instances, les correctifs de l'OS, la plateforme, le scaling, la sécurité. Serverless : tu construis, déploies et surveilles</li>
+              <li>Tu paies le temps d'exécution du code, pas la capacité au repos</li>
+              <li>Principe moderne : <b>petites pièces faiblement couplées</b>, bases de données dédiées, services managés pour l'intégration, infrastructure as code</li>
+              <li>Monolithe : simple au départ, mais une seule pile techno, une seule base dimensionnée pour le pire cas, un pipeline de livraison partagé. Microservices : chaque pièce évolue seule, au prix d'une courbe d'apprentissage</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>Lambda</h3>
+            <ul>
+              <li>Service de calcul <b>serverless</b> : exécute ton code sans provisionner ni gérer de serveur</li>
+              <li><b>Invoque</b> ton code en réponse à des événements</li>
+              <li><b>Scale</b> automatiquement</li>
+              <li>Logs et métriques intégrés via CloudWatch</li>
+              <li>Paiement au temps de calcul utilisé, rien au repos</li>
+              <li>Ton code : Node.js, Python, Ruby, Java, Go, .NET, ou un <b>runtime personnalisé</b></li>
+            </ul>
+            <h3 style="margin-top:10px">Deux composants</h3>
+            <ul>
+              <li><b>Event source</b> : ce qui publie des événements vers Lambda</li>
+              <li><b>Function</b> : ton code, exécuté quand la source déclenche</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>Les 6 atouts</h3>
+            <ul>
+              <li>Apporter son propre code</li>
+              <li>S'intègre aux autres services AWS et les étend</li>
+              <li>Modèles flexibles de ressources et de concurrence</li>
+              <li>Modèle de permissions flexible</li>
+              <li>Disponibilité et tolérance aux pannes intégrées</li>
+              <li>Plus de ressources inactives à payer</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>Cas d'usage</h3>
+            <ul>
+              <li><b>Application web</b> : S3 (front statique) → API Gateway → Lambda → DynamoDB → réponse</li>
+              <li><b>Flux temps réel</b> : Kinesis → Lambda traite les nouveaux records → résultats dans DynamoDB</li>
+              <li><b>Backends</b> web, mobile, IoT, API tierces</li>
+              <li><b>Traitement de données</b> à chaque changement d'état : upload S3, écriture DynamoDB, alarme CloudWatch, horaire</li>
+              <li><b>Chatbots</b> (Lex) et skills <b>Alexa</b></li>
+              <li><b>Automatisation IT</b> : démarrer/arrêter des EC2, mettre à jour des security groups</li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 02 -->
+      <li class="branch">
+        <h2><span class="n">02</span>La fonction et la concurrence</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>Ce qui compose une fonction</h3>
+            <ul>
+              <li><b>Permissions d'accès</b> : qui l'invoque, ce qu'elle a le droit de faire</li>
+              <li><b>Événements déclencheurs</b></li>
+              <li><b>Runtime et package de déploiement</b> : ton code et ses dépendances</li>
+              <li><b>Configuration</b> : mémoire, timeout, variables d'environnement…</li>
+            </ul>
+            <h3 style="margin-top:10px">Environnements éphémères</h3>
+            <ul>
+              <li>Chaque invocation tourne dans un environnement créé à la demande, de courte durée, puis supprimé</li>
+              <li>Tu ne le contrôles pas : Lambda gère son cycle de vie</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>Concurrence</h3>
+            <ul>
+              <li><b>Concurrence</b> = nombre d'invocations qui tournent <b>en même temps</b>. Lambda crée de nouveaux environnements pour suivre le rythme</li>
+              <li><b>Reserved concurrency</b> : plafond optionnel <b>par fonction</b>, pris sur le quota régional. Empêche une fonction d'affamer les autres ou de submerger un système en aval</li>
+              <li><b>Quota régional</b> : limite souple du total des invocations simultanées, <span class="num">1 000</span> par défaut par compte et par Région</li>
+              <li><b>Montée en charge</b> : limite sur la vitesse à laquelle la concurrence peut grimper lors d'un pic</li>
+              <li>Cadence des requêtes × durée de chaque exécution</li>
+              <li>La <b>source d'événements</b> : chaque service gère à sa façon la concurrence de ses invocations</li>
+              <li class="new"><span class="tag new">Précision</span> Depuis fin 2023, chaque fonction monte de <span class="num">1 000</span> environnements toutes les <span class="num">10 s</span> (jusqu'au quota du compte). Les anciens « burst limits » régionaux ne s'appliquent plus tels quels</li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 03 INVOCATION -->
+      <li class="branch focus">
+        <h2><span class="n">03</span>Invocation<span class="sub">push synchrone, push asynchrone ou pull</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Les 3 modes</h3>
+            <div class="tbl"><table>
+              <thead><tr><th></th><th>Push synchrone</th><th>Push asynchrone</th><th>Pull (polling)</th></tr></thead>
+              <tbody>
+                <tr><td>Qui appelle</td><td>La source invoque Lambda directement, l'appelant <b>attend</b> la réponse</td><td>La source dépose l'événement, Lambda le met en file, la source repart (« envoie et oublie »)</td><td>La source met l'info dans un stream ou une file ; <b>Lambda va la chercher</b> et invoque en lots</td></tr>
+                <tr><td>Invocation type</td><td><code>RequestResponse</code></td><td><code>Event</code></td><td>Via un event source mapping</td></tr>
+                <tr><td>Statut HTTP</td><td><code>200</code></td><td><code>202</code> (accepté, pas « réussi »)</td><td>n/a</td></tr>
+                <tr><td>Retry</td><td><b>Aucun</b> côté Lambda : c'est ton code qui réessaie</td><td><b>0 à 2</b> retries automatiques, puis DLQ ou destination <code>OnFailure</code></td><td>Selon la source (voir plus bas)</td></tr>
+                <tr><td>Exemples</td><td>API Gateway, ELB (ALB), Cognito, Lex, Alexa, CloudFront, Firehose</td><td>S3, SNS, SES, CloudWatch Logs, CloudWatch Events / EventBridge, Config</td><td>DynamoDB Streams, Kinesis, SQS</td></tr>
+              </tbody>
+            </table></div>
+            <ul style="margin-top:8px">
+              <li class="trap"><span class="tag trap">Piège</span> Quand un service AWS déclenche Lambda, tu n'as <b>aucun contrôle</b> sur le type d'invocation : il est prédéfini par la source</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Pull : stream ou file</h3>
+            <ul>
+              <li><b>Stream</b> (DynamoDB Streams, Kinesis) : records organisés en <b>shards</b>, Lambda lit un shard et invoque par lots
+                <ul>
+                  <li class="trap">En cas d'échec, Lambda <b>bloque la lecture du shard</b> jusqu'à ce que le lot réussisse ou expire (24 h)</li>
+                  <li>Parade : une destination <code>OnFailure</code> pour contourner un record qui échoue toujours</li>
+                </ul>
+              </li>
+              <li><b>File</b> (SQS) : en cas d'échec, le message redevient visible et est retenté, jusqu'à la limite de retries ou la rétention. Les messages qui échouent toujours vont dans une <b>DLQ</b></li>
+              <li>Le lien source ↔ fonction est un <b>event source mapping</b> (<code>CreateEventSourceMapping</code>)</li>
+              <li>Le polling lui-même est <b>gratuit</b> : tu ne paies que les actions qui en résultent</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Invoquer à la main</h3>
+<pre><code># Synchrone
+aws lambda invoke --function-name my-function \
+  --payload '{...}' response.json
+# → {"StatusCode": 200}
+
+# Asynchrone
+aws lambda invoke --function-name my-function \
+  --invocation-type Event --payload '{...}' response.json
+# → {"StatusCode": 202}</code></pre>
+            <ul>
+              <li class="new"><span class="tag new">Précision</span> Avec l'AWS CLI v2, un payload JSON brut demande <code>--cli-binary-format raw-in-base64-out</code></li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 04 PERMISSIONS -->
+      <li class="branch focus">
+        <h2><span class="n">04</span>Permissions<span class="sub">deux questions distinctes, toutes deux via IAM</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Le schéma</h3>
+            <div class="env">
+              <span>Source d'événements</span><i>→ peut invoquer ?</i><span class="k">Lambda</span><i>→ peut agir sur ?</i><span>Service ou ressource AWS</span>
+            </div>
+            <div class="tbl"><table>
+              <thead><tr><th>Question</th><th>Réponse</th><th>Où</th></tr></thead>
+              <tbody>
+                <tr><td>Qui peut <b>m'invoquer</b> ?</td><td><b>Resource policy</b> (<code>lambda:InvokeFunction</code>)</td><td>Attachée à la fonction</td></tr>
+                <tr><td>Que peut <b>faire ma fonction</b> ?</td><td><b>Rôle d'exécution</b></td><td>Rôle IAM, utilisé par la fonction</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="blk">
+            <h3>1. Resource policy : qui peut invoquer</h3>
+            <ul>
+              <li>Donne à une source d'événements l'action <code>lambda:InvokeFunction</code></li>
+              <li>Pour une source hors Lambda comme S3, la permission équivalente peut vivre sur l'<b>autre</b> ressource (le bucket) plutôt que sur la fonction</li>
+              <li>Permet l'invocation <b>cross-account</b> (le bucket du compte A invoque une fonction du compte B)</li>
+            </ul>
+<pre><code>{ "Effect": "Allow",
+  "Principal": { "Service": "s3.amazonaws.com" },
+  "Action": "lambda:InvokeFunction",
+  "Resource": "arn:aws:lambda:...:function:ma-fonction",
+  "Condition": { "ArnLike":
+    { "AWS:SourceArn": "arn:aws:s3:::mon-bucket" } } }</code></pre>
+          </div>
+
+          <div class="blk">
+            <h3>2. Rôle d'exécution : ce que la fonction peut faire</h3>
+            <ul>
+              <li><b>Policy IAM</b> : les actions permises sur d'autres ressources (écrire dans DynamoDB, lire SQS, écrire les logs CloudWatch). « Qui a le droit de faire quoi »</li>
+              <li><b>Trust policy</b> : quelle entité peut <b>assumer</b> le rôle. Sans elle, même si le rôle existe, personne ne peut l'utiliser. « Qui peut l'endosser »</li>
+            </ul>
+<pre><code>// Trust policy du rôle
+{ "Effect": "Allow",
+  "Principal": { "Service": "lambda.amazonaws.com" },
+  "Action": "sts:AssumeRole" }</code></pre>
+            <ul>
+              <li class="new"><span class="tag new">Précision</span> <code>iam:PassRole</code> est exigé de l'<b>identité qui crée ou modifie</b> la fonction (celle qui « passe » le rôle), pas de Lambda elle-même</li>
+              <li class="trap"><span class="tag trap">Piège</span> Une source en <b>polling</b> (stream, file) utilise le <b>rôle d'exécution</b> pour lire, pas une resource policy</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 05 HANDLER -->
+      <li class="branch">
+        <h2><span class="n">05</span>Le handler</h2>
+        <div class="cols">
+          <div class="blk">
+            <ul>
+              <li>Point d'entrée que Lambda appelle : <code>handler(event, context)</code></li>
+              <li>Chaque langage a sa convention pour le désigner dans le package. Python : <code>module.fonction</code> (ex. <code>app.lambda_handler</code>)</li>
+              <li><b>event</b> : ce qui a déclenché la fonction. Sa forme dépend de la source
+                <ul>
+                  <li>API Gateway : chemin, query string, corps de la requête</li>
+                  <li>S3 : bucket et objet concernés</li>
+                  <li>Peut aussi être un objet de test que tu définis</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+          <div class="blk">
+            <ul>
+              <li><b>context</b> : informations d'exécution générées par AWS, variables selon le langage. Au minimum :
+                <ul>
+                  <li><code>awsRequestId</code> (Python : <code>aws_request_id</code>) : identifie une invocation, utile pour le support AWS</li>
+                  <li><code>logStreamName</code> : le log stream CloudWatch de l'invocation</li>
+                  <li><code>getRemainingTimeInMillis()</code> : ms restantes avant le timeout</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 06 CONFIG -->
+      <li class="branch">
+        <h2><span class="n">06</span>Configuration</h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Performance</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Réglage</th><th>Ce qu'il contrôle</th></tr></thead>
+              <tbody>
+                <tr><td><b>Mémoire</b></td><td><span class="num">128 MB à 10 240 MB</span>. Le <b>CPU est proportionnel</b> à la mémoire</td></tr>
+                <tr><td><b>Timeout</b></td><td><span class="num">1 s à 15 min</span>. Évite le coût d'une fonction bloquée</td></tr>
+                <tr><td><b>Concurrence</b></td><td><span class="num">1 000</span> invocations simultanées par compte et par Région (limite souple). Possibilité de réserver une part à une fonction</td></tr>
+                <tr><td><b>Provisioned concurrency</b></td><td>Garde des environnements <b>pré-chauffés</b> pour éviter les <b>cold starts</b>. Facturé à part</td></tr>
+                <tr><td><b>Monitoring</b></td><td>X-Ray (active tracing) et CloudWatch Lambda Insights</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="blk">
+            <h3>Prix</h3>
+            <ul>
+              <li>Facturation : <b>nombre de requêtes + durée</b></li>
+              <li>Le prix par milliseconde monte avec la mémoire…</li>
+              <li>…mais plus de mémoire = plus de CPU = durée plus courte. Pour du travail lié au CPU, une mémoire plus haute peut donc coûter <b>moins cher</b></li>
+              <li>Utilitaire <b>power tuning</b> pour trouver la mémoire qui minimise le coût total</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Ressources</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Réglage</th><th>Ce qu'il contrôle</th></tr></thead>
+              <tbody>
+                <tr><td>Triggers</td><td>Les sources d'événements qui invoquent la fonction</td></tr>
+                <tr><td>Permissions</td><td>Qui l'invoque, ce qu'elle peut atteindre</td></tr>
+                <tr><td>Destinations</td><td>Où va le résultat d'une invocation async, en succès ou en échec : topic SNS, file SQS, autre Lambda, bus EventBridge</td></tr>
+                <tr><td>Invocation async</td><td>Nombre de retries (<span class="num">0 à 2</span>), âge max d'un événement (jusqu'à <span class="num">6 h</span>), DLQ</td></tr>
+                <tr><td>VPC</td><td>Accès aux ressources d'un VPC privé (bases, caches, services internes)</td></tr>
+                <tr><td>State machines</td><td>Machines Step Functions qui peuvent l'invoquer</td></tr>
+                <tr><td>Database proxies</td><td>RDS Proxy : mise en commun des connexions</td></tr>
+                <tr><td>File systems</td><td>Montage d'un système de fichiers EFS</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="blk">
+            <h3>Code</h3>
+            <ul>
+              <li><b>Runtime</b> : langage et version, ou runtime personnalisé</li>
+              <li><b>Variables d'environnement</b> : paires clé-valeur lues par le code sans le modifier. Bonnes pour la config et pour des valeurs sensibles non secrètes ou chiffrées avec KMS</li>
+              <li><b>Tags</b> : suivi et filtrage des coûts</li>
+              <li><b>Code signing</b> : garantit que le code vient d'une source approuvée et n'a pas été altéré</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 07 BONNES PRATIQUES -->
+      <li class="branch">
+        <h2><span class="n">07</span>Bonnes pratiques</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>Concevoir la fonction</h3>
+            <ul>
+              <li><b>Sans état</b> : ne jamais supposer qu'une donnée en mémoire survit entre deux invocations</li>
+              <li><b>Seulement le nécessaire</b> : package et dépendances minimaux, pas tout un SDK pour deux modules. Moins de dépendances = démarrage plus rapide</li>
+              <li><b>Réutiliser l'environnement</b> : initialiser les ressources coûteuses (connexion à une base, client SDK) <b>hors du handler</b>, pour que les invocations « chaudes » les réutilisent</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>Écrire le code</h3>
+            <ul>
+              <li>Séparer la logique métier du handler : plus portable, plus facile à tester</li>
+              <li>Fonctions modulaires, à usage unique</li>
+              <li>Ajouter des logs (écrits dans CloudWatch) et renvoyer un résultat</li>
+              <li>Variables d'environnement plutôt que valeurs en dur (nom de bucket ou de table)</li>
+              <li class="trap"><span class="tag trap">Piège</span> Pas de code récursif : une fonction qui s'invoque elle-même peut s'emballer via la concurrence</li>
+              <li class="trap"><span class="tag trap">Piège</span> Ne pas appeler une Lambda depuis une autre : utiliser des destinations ou orchestrer avec <b>Step Functions</b></li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 08 DEPLOIEMENT -->
+      <li class="branch">
+        <h2><span class="n">08</span>Déploiement : package, versions, alias, layers</h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Deux types de package</h3>
+            <div class="tbl"><table>
+              <thead><tr><th></th><th>.zip</th><th>Image conteneur</th></tr></thead>
+              <tbody>
+                <tr><td>Principe</td><td>Choisir un runtime, compresser code et dépendances, uploader</td><td>Choisir runtime et distribution Linux, emballer le code dans une image, la pousser dans <b>ECR</b></td></tr>
+                <tr><td>Mise en ligne</td><td>Éditeur de la console, package depuis l'IDE, ou zip déposé sur S3 puis référencé</td><td>Lambda tire l'image d'ECR, l'optimise, la déploie : statut <code>PENDING</code> puis <code>ACTIVE</code></td></tr>
+                <tr><td>Limites</td><td><span class="num">50 MB</span> zippé (upload direct) ; <span class="num">250 MB</span> décompressé avec les layers ; <span class="num">3 MB</span> dans l'éditeur console ; 512 KB par fichier individuel</td><td>Jusqu'à 10 GB (voir branche 11)</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="blk">
+            <h3>Créer et mettre à jour (CLI)</h3>
+<pre><code>aws lambda create-function \
+  --function-name my-function --runtime python3.13 \
+  --zip-file fileb://my-function.zip \
+  --handler app.lambda_handler \
+  --role arn:aws:iam::123456789012:role/MonRole
+
+aws lambda update-function-code \
+  --function-name my-function \
+  --zip-file fileb://my-function.zip</code></pre>
+            <ul>
+              <li class="new"><span class="tag new">Précision</span> L'exemple du cours utilise <code>nodejs10.x</code>, un runtime retiré depuis longtemps. Prends un runtime actuellement supporté</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Versions et alias</h3>
+            <ul>
+              <li><b>Version</b> : instantané <b>immuable</b> du code + de la configuration. Seule <code>$LATEST</code> existe tant qu'on ne publie pas. Chaque version publiée (<code>1</code>, <code>2</code>…) a son propre ARN</li>
+              <li class="trap"><span class="tag trap">Piège</span> Une fois publiée, une version ne peut plus être modifiée</li>
+              <li><b>Alias</b> : pointeur <b>mutable</b> et nommé vers une version (<code>DEV</code>, <code>TEST</code>, <code>PROD</code>), avec son propre ARN</li>
+              <li>Promouvoir ou revenir en arrière = repointer l'alias, sans changer le code</li>
+              <li class="trap"><span class="tag trap">Piège</span> Brancher les services (notification S3, intégration API Gateway) sur l'<b>alias</b> et non sur une version : sinon il faut modifier la config de chaque service à chaque déploiement</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Layers</h3>
+            <ul>
+              <li>Archive .zip de bibliothèques, de runtime personnalisé ou de dépendances partagées, attachable sans les intégrer au package</li>
+              <li>Maximum <span class="num">5</span> layers par fonction, <span class="num">250 MB</span> au total décompressé (fonction + layers)</li>
+              <li>Garde les packages petits (éditable dans la console sous 3 MB pour Node.js, Python, Ruby) et partage une dépendance entre plusieurs fonctions</li>
+              <li>AWS publie un layer public NumPy / SciPy pour Python</li>
+            </ul>
+            <h3 style="margin-top:10px">Runtimes personnalisés</h3>
+            <ul>
+              <li>Pour un langage non supporté. Une <b>runtime interface</b> reçoit les événements et envoie les réponses</li>
+              <li>Le fichier <b>bootstrap</b> est le point d'entrée. Livrable avec le code ou comme layer</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 09 SURVEILLANCE -->
+      <li class="branch">
+        <h2><span class="n">09</span>Surveillance et débogage</h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>CloudWatch</h3>
+            <ul>
+              <li>Logs, métriques et événements dans une vue unifiée. Logs lus comme un flux chronologique</li>
+              <li><b>Logs Insights</b> : requêtes interactives sur les logs</li>
+              <li>Métriques par défaut, <b>alarmes</b> sur seuils avec actions automatiques</li>
+            </ul>
+            <h3 style="margin-top:10px">Structure des logs Lambda</h3>
+            <ul>
+              <li>Un log group par fonction : <code>/aws/lambda/&lt;nom-fonction&gt;</code>, créé à la première invocation (ou à la config de la provisioned concurrency)</li>
+              <li>Log streams organisés par date, version de fonction et ID unique</li>
+              <li>Chaque invocation a un <code>RequestId</code> et 3 lignes clés :
+                <ul>
+                  <li><code>START</code> : début</li>
+                  <li><code>END</code> : fin</li>
+                  <li><code>REPORT</code> : durée facturée, mémoire configurée, mémoire utilisée et, si présent, <code>Init Duration</code> = cette invocation a payé un <b>cold start</b></li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>X-Ray</h3>
+            <ul>
+              <li>Suit une requête à travers les composants de l'application et dessine une <b>service map</b></li>
+              <li>Activation en un clic pour Lambda ; le SDK X-Ray capte les appels faits avec le SDK AWS</li>
+              <li>Distribution visuelle des latences, isolement des valeurs aberrantes, filtrage par type d'erreur</li>
+            </ul>
+            <div class="tbl"><table>
+              <thead><tr><th>Élément</th><th>Rôle</th></tr></thead>
+              <tbody>
+                <tr><td><b>Segment</b></td><td>Travail d'une ressource de calcul : nom, détails de la requête, sous-segments</td></tr>
+                <tr><td><b>Subsegment</b></td><td>Découpage plus fin : appel à une base, une API externe, un service AWS, ou un bloc de code</td></tr>
+                <tr><td><b>Annotations</b></td><td>Paires clé-valeur <b>indexées</b>, utilisables dans les expressions de filtre pour chercher et grouper</td></tr>
+                <tr><td><b>Metadata</b></td><td>Paires de tout type, <b>non indexées</b>, pour du contexte qu'on ne cherchera pas</td></tr>
+              </tbody>
+            </table></div>
+            <ul style="margin-top:8px">
+              <li class="trap"><span class="tag trap">Piège</span> Annotation = on peut chercher dessus. Metadata = non</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 10 CAS APPLIQUE -->
+      <li class="branch">
+        <h2><span class="n">10</span>Cas appliqué : le handler du fraud-detector</h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Les 7 étapes</h3>
+            <ul>
+              <li><b>1. Lire l'event</b> : avec l'intégration proxy, le corps HTTP arrive comme une <b>chaîne JSON</b> dans <code>event["body"]</code>, jamais déjà parsé</li>
+              <li><b>2. Extraire avec <code>.get()</code></b> : <code>body["user_id"]</code> lève une <code>KeyError</code> si le champ manque. <code>body.get("user_id", "unknown")</code> dégrade proprement. Le défaut « unknown » est un raccourci temporaire, avant Cognito</li>
+              <li><b>3. Ne jamais faire confiance au client</b> pour l'identité ni l'heure : <code>transaction_id</code> et timestamp sont générés <b>côté serveur</b>, sinon un client pourrait fabriquer des IDs, provoquer des collisions ou antidater</li>
+              <li><b>4. Construire les clés</b> avec de simples f-strings</li>
+              <li><b>5. Valider avant d'écrire</b> : échouer vite avec un 4xx clair</li>
+              <li><b>6. Écrire</b> : <code>table.put_item(Item=item)</code>, la seule ligne qui touche DynamoDB. Tout ce qui précède se teste sans base</li>
+              <li><b>7. Toujours renvoyer une réponse valide</b> : <code>statusCode</code> et <code>body</code> au minimum, avec <code>body</code> en <b>chaîne JSON</b>, pas un dict</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Le code</h3>
+<pre><code>body = json.loads(event["body"])
+user_id = body.get("user_id", "unknown")
+amount = body.get("amount")
+merchant = body.get("merchant")
+
+if amount is None or merchant is None:
+    return build_response(400,
+      {"error": "amount and merchant are required"})
+
+transaction_id = str(uuid.uuid4())
+timestamp = (datetime.now(timezone.utc)
+  .isoformat(timespec="seconds")
+  .replace("+00:00", "Z"))
+
+pk = f"USER#{user_id}"
+sk = f"TXN#{timestamp}#{transaction_id}"
+table.put_item(Item=item)</code></pre>
+<pre><code>def build_response(status_code, data):
+    return {
+      "statusCode": status_code,
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+      },
+      "body": json.dumps(data)
+    }</code></pre>
+            <ul>
+              <li>Les en-têtes CORS sont renvoyés par la Lambda elle-même (voir les cartes DynamoDB et API Gateway)</li>
+              <li class="new"><span class="tag new">Précision</span> À l'écriture, boto3 refuse les <code>float</code> : <code>TypeError: Float types are not supported. Use Decimal types instead</code>. Parser avec <code>json.loads(event["body"], parse_float=Decimal)</code></li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 11 HORS NOTES -->
+      <li class="branch">
+        <h2><span class="n">11</span>Hors de tes notes<span class="sub">à connaître pour le DVA-C02</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Limites à connaître</h3>
+            <ul>
+              <li>Payload d'une invocation <b>synchrone</b> : <span class="num">6 MB</span> (requête et réponse)</li>
+              <li>Payload d'une invocation <b>asynchrone</b> : <span class="num">256 KB</span> jusqu'en 2025, <span class="num">1 MB</span> depuis octobre 2025. Un examen ancien peut encore citer 256 KB</li>
+              <li>Stockage éphémère <code>/tmp</code> : <span class="num">512 MB</span> par défaut, jusqu'à <span class="num">10 240 MB</span>. Peut persister entre invocations « chaudes », sans garantie</li>
+              <li>Variables d'environnement : <span class="num">4 KB</span> au total</li>
+              <li>Image conteneur : jusqu'à <span class="num">10 GB</span></li>
+              <li>Vitesse de calcul : environ <span class="num">1 769 MB</span> de mémoire = 1 vCPU</li>
+              <li>Gratuit chaque mois : 1 million de requêtes + 400 000 GB-secondes</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Erreurs et retries, en détail</h3>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> Pour une fonction déclenchée par <b>SQS</b>, la DLQ se configure sur la <b>file source</b>, pas sur la fonction. Le réglage DLQ de la fonction ne vaut que pour l'invocation <b>asynchrone</b></li>
+              <li>Les <b>destinations</b> (succès / échec) sont préférées à la DLQ : elles portent plus d'informations</li>
+              <li>Streams, réglages de l'event source mapping : <code>BisectBatchOnFunctionError</code>, <code>MaximumRetryAttempts</code>, <code>MaximumRecordAgeInSeconds</code>, <code>ReportBatchItemFailures</code></li>
+              <li>SQS : le <b>visibility timeout</b> de la file doit valoir au moins <span class="num">6×</span> le timeout de la fonction. <b>Partial batch response</b> pour ne retenter que les messages en échec</li>
+              <li>Throttling (concurrence atteinte) : erreur <code>429 TooManyRequestsException</code> en synchrone ; en asynchrone, Lambda retente pendant jusqu'à 6 h</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Concurrence et démarrage</h3>
+            <ul>
+              <li>Reserved concurrency : sans frais, garantit une capacité <b>et</b> plafonne la fonction. La mettre à <code>0</code> coupe la fonction (utile en urgence)</li>
+              <li>Provisioned concurrency : payante, contre les cold starts</li>
+              <li><b>SnapStart</b> : réduit le cold start en restaurant un instantané de l'environnement initialisé (Java, et aussi Python et .NET)</li>
+              <li>Le cold start dépend de la taille du package, du runtime et de l'initialisation hors handler</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Réseau et sécurité</h3>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> Lambda dans un <b>VPC</b> : pas d'accès à Internet (ni aux API AWS publiques) sans <b>NAT gateway</b> ou <b>endpoints VPC</b>. La fonction a aussi besoin des droits pour créer ses interfaces réseau</li>
+              <li class="trap"><span class="tag trap">Piège</span> Pas de logs dans CloudWatch ? Le rôle d'exécution n'a pas les droits d'écriture (politique <code>AWSLambdaBasicExecutionRole</code>)</li>
+              <li>Secrets : variables d'environnement chiffrées avec KMS, ou mieux <b>Secrets Manager</b> / <b>Parameter Store</b></li>
+              <li>Appel par API Gateway : la ressource de la fonction doit autoriser <code>apigateway.amazonaws.com</code>. Si la fonction est désignée par une variable de stage, ajouter la permission à la main (<code>aws lambda add-permission</code>)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Déploiement progressif</h3>
+            <ul>
+              <li>Un <b>alias pondéré</b> répartit le trafic entre deux versions (ex. 90 % / 10 %) : un canary natif</li>
+              <li>SAM : <code>AutoPublishAlias</code> et <code>DeploymentPreference</code> pilotent CodeDeploy pour des déploiements progressifs</li>
+            </ul>
+            <h3 style="margin-top:10px">Autres déclencheurs</h3>
+            <ul>
+              <li><b>Function URL</b> : endpoint HTTPS dédié à la fonction, avec auth <code>AWS_IAM</code> ou <code>NONE</code>, sans API Gateway</li>
+              <li><b>EventBridge</b> : appel planifié (cron / rate)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Métriques CloudWatch utiles</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Métrique</th><th>Sens</th></tr></thead>
+              <tbody>
+                <tr><td><code>Invocations</code></td><td>Nombre d'appels</td></tr>
+                <tr><td><code>Errors</code></td><td>Invocations en erreur</td></tr>
+                <tr><td><code>Throttles</code></td><td>Appels rejetés faute de concurrence</td></tr>
+                <tr><td><code>Duration</code></td><td>Temps d'exécution</td></tr>
+                <tr><td><code>ConcurrentExecutions</code></td><td>Exécutions simultanées</td></tr>
+                <tr><td><code>IteratorAge</code></td><td>Retard de lecture sur un stream (Kinesis, DynamoDB Streams)</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 12 GLOSSAIRE -->
+      <li class="branch">
+        <h2><span class="n">12</span>Glossaire des sigles</h2>
+        <dl class="gloss">
+          <div><dt>ARN</dt><dd>Amazon Resource Name <em>(identifiant unique)</em></dd></div>
+          <div><dt>IAM</dt><dd>Identity and Access Management</dd></div>
+          <div><dt>STS</dt><dd>Security Token Service <em>(AssumeRole)</em></dd></div>
+          <div><dt>KMS</dt><dd>Key Management Service</dd></div>
+          <div><dt>VPC</dt><dd>Virtual Private Cloud</dd></div>
+          <div><dt>NAT</dt><dd>Network Address Translation <em>(sortie Internet d'un sous-réseau privé)</em></dd></div>
+          <div><dt>ENI</dt><dd>Elastic Network Interface</dd></div>
+          <div><dt>DLQ</dt><dd>Dead-Letter Queue <em>(file des messages en échec)</em></dd></div>
+          <div><dt>ESM</dt><dd>Event Source Mapping <em>(lien source ↔ fonction en pull)</em></dd></div>
+          <div><dt>ECR</dt><dd>Elastic Container Registry</dd></div>
+          <div><dt>EFS</dt><dd>Elastic File System</dd></div>
+          <div><dt>SQS</dt><dd>Simple Queue Service</dd></div>
+          <div><dt>SNS</dt><dd>Simple Notification Service</dd></div>
+          <div><dt>SES</dt><dd>Simple Email Service</dd></div>
+          <div><dt>RDS</dt><dd>Relational Database Service <em>(RDS Proxy)</em></dd></div>
+          <div><dt>SAM</dt><dd>Serverless Application Model</dd></div>
+          <div><dt>GB-s</dt><dd>Gigaoctet-seconde <em>(unité de facturation de la durée)</em></dd></div>
+          <div><dt>CORS</dt><dd>Cross-Origin Resource Sharing</dd></div>
+          <div><dt>UUID</dt><dd>Universally Unique Identifier</dd></div>
+          <div><dt>ISO</dt><dd>ISO 8601 : date <code>AAAA-MM-JJThh:mm:ssZ</code>, triable alphabétiquement</dd></div>
+        </dl>
+      </li>
+
+    </ul>
+  </div>
+
+  <section class="recap">
+    <h2>Les réflexes pour l'examen</h2>
+    <ol>
+      <li>Lambda tourne sur événement et se paie en requêtes + durée, rien au repos. Maximum 15 min par exécution.</li>
+      <li>Mémoire de 128 à 10 240 MB, le CPU suit la mémoire. Plus de mémoire peut coûter moins cher (power tuning).</li>
+      <li>Cold start → provisioned concurrency (payante) et initialisation hors du handler. <code>Init Duration</code> dans REPORT = cold start.</li>
+      <li>Service AWS qui déclenche Lambda → type d'invocation imposé : API Gateway / ALB = synchrone, S3 / SNS / EventBridge = asynchrone, SQS / Kinesis / DynamoDB Streams = polling.</li>
+      <li>Synchrone : pas de retry Lambda, c'est le client qui réessaie. Asynchrone : 2 retries puis DLQ ou destination OnFailure.</li>
+      <li>Statut 200 = synchrone réussi. 202 = asynchrone accepté, pas encore exécuté.</li>
+      <li>Stream en échec → le shard est bloqué jusqu'à résolution : OnFailure, bisect, limite de retries.</li>
+      <li>Fonction déclenchée par SQS → la DLQ se met sur la file SQS.</li>
+      <li>Qui peut invoquer la fonction → resource policy (<code>lambda:InvokeFunction</code>). Ce que la fonction peut faire → rôle d'exécution.</li>
+      <li>Rôle d'exécution = policy IAM + trust policy (<code>lambda.amazonaws.com</code>). Pas de logs → manque la politique d'écriture CloudWatch.</li>
+      <li>Lambda qui lit une file ou un stream → permissions sur le rôle d'exécution, pas sur la resource policy.</li>
+      <li>Invocation cross-account → resource policy sur la fonction (ou sur la ressource source).</li>
+      <li>Quota 1 000 simultanés par Région. Reserved concurrency = plafond + garantie, protège la base en aval. À 0 elle coupe la fonction.</li>
+      <li>Erreur 429 TooManyRequestsException → throttling.</li>
+      <li>Version = immuable. Alias = pointeur mutable. Brancher les sources sur l'alias. Alias pondéré = canary.</li>
+      <li>Dépendances partagées → layers (5 max, 250 MB au total décompressé).</li>
+      <li>Zip : 50 MB zippé, 250 MB décompressé. Image conteneur : jusqu'à 10 GB via ECR.</li>
+      <li>Config sensible → variables d'environnement chiffrées KMS (4 KB max) ou Secrets Manager.</li>
+      <li>Lambda dans un VPC sans accès Internet → NAT gateway ou endpoints VPC.</li>
+      <li>Une Lambda n'en appelle pas une autre directement → destinations ou Step Functions. Pas de récursion.</li>
+      <li>Tracer entre services → X-Ray. Annotations indexées, metadata non. Retard sur un stream → <code>IteratorAge</code>.</li>
+      <li>Avec API Gateway, <code>body</code> doit être une chaîne JSON, sinon 502. Les en-têtes CORS se renvoient depuis la Lambda.</li>
+    </ol>
+  </section>
+</div>

@@ -1,0 +1,619 @@
+<title>Carte mentale API Gateway</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: arbre (racine à gauche, colonne vertébrale, 9 branches empilées) ; contenu des branches en 2 colonnes sur grand écran, arbre vertical sur mobile */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --fg: #16211f;
+  --muted: #5a6864;
+  --line: #b9c6c2;
+  --accent: #0f6b5c;
+  --accent-soft: #dcefe9;
+  --trap: #9a4b00;
+  --trap-soft: #fdebd7;
+  --new: #2e4fa8;
+  --new-soft: #e2e8fa;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1614; --surface: #17211e; --fg: #e3ece9; --muted: #93a39e; --line: #33443f;
+    --accent: #5cc7b0; --accent-soft: #173a33; --trap: #f0a95c; --trap-soft: #3a2712;
+    --new: #93acf5; --new-soft: #1c2645; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1614; --surface: #17211e; --fg: #e3ece9; --muted: #93a39e; --line: #33443f;
+  --accent: #5cc7b0; --accent-soft: #173a33; --trap: #f0a95c; --trap-soft: #3a2712;
+  --new: #93acf5; --new-soft: #1c2645; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 32px 16px 56px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 28px; }
+h1 { font-family: var(--f-display); font-weight: 800; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h1 small { display: block; font-family: var(--f-body); font-weight: 500; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; color: var(--muted); }
+.tag { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 7px; border-radius: 4px; vertical-align: 1px; white-space: nowrap; }
+.tag.trap { background: var(--trap-soft); color: var(--trap); }
+.tag.new { background: var(--new-soft); color: var(--new); }
+code { font-family: var(--f-mono); font-size: 12px; background: var(--accent-soft); color: var(--fg); padding: 0 4px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 6px 0 2px; background: var(--accent-soft); border-radius: 6px; padding: 8px 10px; overflow-x: auto; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+abbr { text-decoration: none; border-bottom: 1px dotted var(--muted); cursor: help; }
+
+/* ---- Arbre ---- */
+.map { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: start; }
+.root { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--accent); color: var(--bg); border-radius: 14px; padding: 22px 16px; text-align: center; }
+.root b { display: block; font-family: var(--f-display); font-size: 34px; font-weight: 800; line-height: 1; }
+.root span { font-size: 12px; opacity: .9; }
+.branches { list-style: none; margin: 0 0 0 28px; padding: 0 0 0 28px; border-left: 2px solid var(--line); display: grid; gap: 14px; }
+.branch { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 14px; min-width: 0; }
+.branch::before { content: ""; position: absolute; left: -29px; top: 24px; width: 28px; border-top: 2px solid var(--line); }
+.branch.focus { border-color: var(--accent); border-width: 1.5px; }
+.branch h2 { font-family: var(--f-display); font-weight: 600; font-size: 19px; margin: 0 0 10px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.branch h2 .n { font-family: var(--f-mono); font-size: 11px; color: var(--accent); font-weight: 500; }
+.branch h2 .sub { font-family: var(--f-body); font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.branch h3 { font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+.cols { columns: 2 320px; column-gap: 32px; }
+.blk { break-inside: avoid; margin-bottom: 14px; }
+.blk:last-child { margin-bottom: 0; }
+.branch ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.branch li { position: relative; padding-left: 14px; }
+.branch li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.branch li ul { margin-top: 4px; gap: 3px; }
+.branch li li { color: var(--muted); }
+.branch li li::before { background: none; border: 1.5px solid var(--line); width: 5px; height: 5px; }
+.branch li.trap::before { background: var(--trap); border-radius: 1px; transform: rotate(45deg); }
+.branch li.new::before { background: var(--new); }
+.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+p.note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+/* schéma enveloppe */
+.env { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; margin: 4px 0 6px; }
+.env span { border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; background: var(--bg); }
+.env span.k { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.env i { color: var(--muted); font-style: normal; }
+
+/* tableaux */
+.tbl { overflow-x: auto; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+td:first-child { white-space: nowrap; }
+
+/* glossaire */
+.gloss { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 20px; margin: 0; }
+.gloss div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.gloss dt { font-family: var(--f-mono); font-weight: 500; color: var(--accent); font-size: 12.5px; }
+.gloss dd { margin: 0; font-size: 12.5px; }
+.gloss dd em { color: var(--muted); font-style: normal; }
+
+.recap { margin-top: 28px; background: var(--trap-soft); border-radius: 12px; padding: 18px 20px; }
+.recap h2 { font-family: var(--f-display); font-size: 20px; margin: 0 0 10px; color: var(--trap); }
+.recap ol { margin: 0; padding-left: 22px; columns: 2 320px; column-gap: 32px; }
+.recap li { margin-bottom: 5px; break-inside: avoid; }
+
+@media (max-width: 720px) {
+  .map { grid-template-columns: minmax(0, 1fr); }
+  .root { position: relative; top: 0; }
+  .root::after { content: ""; position: absolute; left: 28px; bottom: -20px; height: 20px; border-left: 2px solid var(--line); }
+  .branches { margin: 20px 0 0 28px; padding-left: 16px; }
+  .branch { padding: 12px 14px; }
+  .branch::before { left: -17px; width: 16px; }
+}
+.root b { font-size: 25px; letter-spacing: -0.01em; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><small>AWS DVA-C02 · Module 6</small>Amazon API Gateway, carte mentale</h1>
+    <div class="legend">
+      <span><span class="tag trap">Piège</span> classique à l'examen</span>
+      <span><span class="tag new">Précision</span> corrige ou complète tes notes</span>
+      <span>Sigles soulignés en pointillé : voir le glossaire en bas</span>
+    </div>
+  </header>
+
+  <div class="map">
+    <div class="root"><b>API<br>Gateway</b><span>La porte d'entrée de tes backends</span></div>
+
+    <ul class="branches">
+
+      <!-- 01 -->
+      <li class="branch">
+        <h2><span class="n">01</span>Les API et la passerelle</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>Une API</h3>
+            <ul>
+              <li><b>Abstrait l'implémentation</b> : le consommateur ignore comment le fournisseur travaille</li>
+              <li><b>N'expose que le nécessaire</b> : une surface contrôlée, pas tout le système</li>
+              <li>Établit un <b>protocole de communication</b> entre fournisseur et consommateur</li>
+              <li>Flux typique : client → serveur web (API) → base de données, l'API traduit dans les deux sens</li>
+              <li>Protocoles possibles : SOAP, WebSockets, HTTP, HTTPS</li>
+              <li>Codes de statut : <code>20x</code> succès, <code>40x</code> erreur client, <code>50x</code> erreur serveur</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>REST et RESTful</h3>
+            <ul>
+              <li><b>REST</b> : un <b>style d'architecture</b> (sans état, URI = ressources, verbes HTTP standard)</li>
+              <li><b>RESTful</b> : une API qui respecte ces principes. Dans la pratique, les deux mots se confondent</li>
+            </ul>
+            <h3 style="margin-top:10px">API Gateway</h3>
+            <ul>
+              <li>Service <b>managé et serverless</b>, la « porte d'entrée » de tes backends</li>
+              <li>Fonctionne comme un videur : limite le débit, valide les clés, route selon l'origine, rejette les requêtes invalides avant le backend</li>
+              <li>Peut fronter : <b>Lambda, EC2</b>, tout autre service AWS, des <b>endpoints VPC</b>, un système <b>on-premises</b> (via Direct Connect)</li>
+              <li>Facturation : <b>par appel reçu</b> + données sortantes, aucun serveur à gérer</li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 02 -->
+      <li class="branch">
+        <h2><span class="n">02</span>Types d'API<span class="sub">REST, HTTP ou WebSocket</span></h2>
+        <div class="cols">
+          <div class="blk">
+            <div class="tbl"><table>
+              <thead><tr><th></th><th>REST API</th><th>HTTP API</th></tr></thead>
+              <tbody>
+                <tr><td>Esprit</td><td>Contrôle complet, fonctions avancées</td><td>Léger, orienté proxy</td></tr>
+                <tr><td>Coût</td><td>Plus élevé</td><td>Latence plus basse, <b>jusqu'à ~70 % moins cher</b></td></tr>
+                <tr><td>Exclusif</td><td>Mock, transformation fine (VTL), usage plans, API keys, resource policies, cache, génération de SDK client, endpoints edge et privés</td><td>Paramètre mapping, auto-déploiement</td></tr>
+                <tr><td>Choisir si</td><td>Fonctions avancées, monétisation, API privée au VPC</td><td>Simple passage vers Lambda ou un backend HTTP</td></tr>
+              </tbody>
+            </table></div>
+            <p class="note">Règle : HTTP API par défaut, REST API seulement si tu as besoin d'une de ses fonctions.</p>
+          </div>
+          <div class="blk">
+            <h3>WebSocket API</h3>
+            <ul>
+              <li><b>Bidirectionnelle</b> : chaque côté peut envoyer un message à tout moment (pas de requête/réponse)</li>
+              <li>Efficace pour les applications « bavardes » en temps réel : chat, tableaux de bord en direct, multijoueur</li>
+              <li><b>WSS</b> = la variante sécurisée (TLS) du protocole</li>
+              <li>Il faut définir des <b>route keys</b> : <code>$connect</code>, <code>$disconnect</code>, <code>$default</code>, plus des routes personnalisées via une route selection expression (ex. <code>$request.body.action</code>)</li>
+            </ul>
+            <h3 style="margin-top:10px">Gérer l'API</h3>
+            <ul>
+              <li>Développer : console, CLI, ou import/export d'une définition <b>OpenAPI</b> (Swagger)</li>
+              <li>Déployer : <b>SAM, CloudFormation</b> ou <b>CDK</b></li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 03 -->
+      <li class="branch">
+        <h2><span class="n">03</span>Créer une API REST</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>URL d'appel</h3>
+<pre><code>https://{restapi_id}.execute-api.{region}
+        .amazonaws.com/{stage_name}/</code></pre>
+            <ul>
+              <li>Générée automatiquement, sauf si tu configures un domaine personnalisé</li>
+            </ul>
+            <h3 style="margin-top:10px">Routes et méthodes</h3>
+<pre><code>GET  /products        → liste des produits
+GET  /products/{id}   → un produit
+PUT  /products/{id}   → mise à jour d'un produit</code></pre>
+            <ul><li>Une route = méthode HTTP + chemin, reliée à une intégration (Lambda, HTTP, service AWS…)</li></ul>
+          </div>
+          <div class="blk">
+            <h3>Variable gloutonne</h3>
+            <ul>
+              <li><code>{proxy+}</code> : route fourre-tout (ex. <code>ANY /{proxy+}</code>), tout chemin et toute méthode vers <b>une seule intégration</b></li>
+              <li>Souvent une Lambda qui fait son propre routage. Évite de déclarer chaque route</li>
+            </ul>
+            <h3 style="margin-top:10px">Mock endpoint</h3>
+            <ul>
+              <li>API Gateway renvoie une <b>réponse prédéfinie</b>, sans appeler de backend</li>
+              <li>Utile pour prototyper un frontend avant que le backend existe</li>
+              <li>Sert aussi à gérer les requêtes <b>preflight CORS</b> (<code>OPTIONS</code>)</li>
+            </ul>
+            <h3 style="margin-top:10px">Import / export</h3>
+            <ul><li>Une API REST ou HTTP se décrit en OpenAPI : import en bloc, ou export pour le versionnement et la portabilité</li></ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 04 -->
+      <li class="branch">
+        <h2><span class="n">04</span>Types d'endpoint</h2>
+        <div class="cols">
+          <div class="blk">
+            <div class="tbl"><table>
+              <thead><tr><th>Type</th><th>Pour</th><th>À retenir</th></tr></thead>
+              <tbody>
+                <tr><td><b>Edge-optimized</b></td><td>REST seulement</td><td>Passe par un point de présence <b>CloudFront</b> automatiquement, protection DDoS intégrée. Pour des clients répartis dans le monde</td></tr>
+                <tr><td><b>Regional</b></td><td>REST, HTTP, WebSocket</td><td>Servi depuis une seule Région. Bonne pratique : placer ta propre distribution CloudFront devant, pour le CDN et plus de contrôle</td></tr>
+                <tr><td><b>Private</b></td><td>REST seulement</td><td>Accessible <b>seulement depuis un VPC</b>, via un endpoint VPC</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+          <div class="blk">
+            <h3>SDK client</h3>
+            <ul>
+              <li>API Gateway génère des SDK clients pour les API REST : JavaScript, Android, iOS, Ruby, Java</li>
+              <li class="trap"><span class="tag trap">Piège</span> Un SDK client demande en général des <b>credentials AWS côté client</b> : risque de sécurité. Des appels HTTPS simples sont préférables, sauf besoin réel du SDK</li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 05 INTEGRATIONS -->
+      <li class="branch focus">
+        <h2><span class="n">05</span>Intégrations<span class="sub">ce que l'API appelle derrière elle</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Les 5 types</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Type</th><th>Principe</th><th>Quand</th></tr></thead>
+              <tbody>
+                <tr><td><b>Lambda proxy</b><br><code>AWS_PROXY</code></td><td>La requête brute passe telle quelle à Lambda, sa réponse revient telle quelle au client</td><td>Cas le plus courant. Lambda gère tout</td></tr>
+                <tr><td><b>Lambda non-proxy</b><br><span style="color:var(--muted)">custom</span></td><td>Échange via des <b>mapping templates VTL</b> qui transforment requête et réponse</td><td>Découpler le contrat public de l'API du format interne de la Lambda</td></tr>
+                <tr><td><b>Service AWS</b><br><span style="color:var(--muted)">first-class</span></td><td>Appel direct : SQS <code>SendMessage</code>, Step Functions <code>StartExecution</code>…</td><td>Pas de Lambda entre les deux : une couche de calcul en moins</td></tr>
+                <tr><td><b>HTTP proxy</b></td><td>Transfère vers un autre endpoint HTTP(S) (EC2, API externe)</td><td>Migrer un monolithe vers des microservices, route par route</td></tr>
+                <tr><td><b>VPC Link</b></td><td>Atteint des ressources d'un VPC sans endpoint public (ex. ALB interne, NLB)</td><td>Backend privé, non exposé à Internet</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="blk">
+            <h3>Lambda proxy : la forme obligatoire</h3>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> La Lambda <b>doit</b> renvoyer exactement cette forme, avec <code>body</code> en <b>chaîne</b>. Sinon API Gateway renvoie une erreur 502</li>
+            </ul>
+<pre><code>{
+  "statusCode": 200,
+  "headers": { "Content-Type": "application/json" },
+  "body": "{\"message\": \"ok\"}",
+  "isBase64Encoded": false
+}</code></pre>
+            <ul>
+              <li>Exemple d'erreur 403 : <code>statusCode: 403</code>, <code>body: "{\"error\": \"Forbidden\"}"</code></li>
+              <li>Avec le proxy, les en-têtes CORS sont aussi à renvoyer par la Lambda (voir la carte DynamoDB, branche 12)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Le trajet d'une requête</h3>
+            <div class="env">
+              <i>aller</i><span class="k">Method Request</span><i>→</i><span class="k">Integration Request</span>
+            </div>
+            <div class="env">
+              <i>retour</i><span class="k">Integration Response</span><i>→</i><span class="k">Method Response</span>
+            </div>
+            <ul>
+              <li>Le client entre par <b>Method Request</b>, le backend est appelé après <b>Integration Request</b>, et la réponse repart dans l'ordre inverse</li>
+              <li>Chaque étape est un point où API Gateway peut <b>valider, transformer ou rejeter</b></li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Parameter mapping (HTTP API)</h3>
+            <ul>
+              <li>Alternative plus légère aux templates VTL des API REST</li>
+              <li>Ajoute, écrase ou retire des en-têtes, query strings ou paramètres de chemin au passage</li>
+              <li>Exemple : injecter <code>$context.requestId</code> comme en-tête avant le backend</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 06 DEPLOIEMENT -->
+      <li class="branch">
+        <h2><span class="n">06</span>Déploiement : stages, variables, canary</h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Stages</h3>
+            <ul>
+              <li>Un <b>stage</b> est une version nommée de l'API : <code>dev</code>, <code>beta</code>, <code>prod</code>. Son nom apparaît dans l'URL d'appel</li>
+              <li><b>Obligatoire</b> pour REST et WebSocket : sans déploiement sur un stage, l'API n'est pas joignable</li>
+              <li><b>Automatique</b> pour HTTP : stage par défaut, avec option d'auto-déploiement à chaque changement</li>
+              <li>Un stage peut représenter un environnement, chacun avec un backend différent</li>
+              <li class="new"><span class="tag new">Précision</span> Sur une API REST, une modification n'est visible qu'après un <b>nouveau déploiement</b> sur le stage</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Variables de stage</h3>
+            <ul>
+              <li>Paire clé/valeur propre à un stage, utilisable dans la config d'une intégration</li>
+              <li>Exemple : <code>${stageVariables.lambdaAlias}</code> vaut <code>dev</code>, <code>beta</code> ou <code>prod</code> selon le stage</li>
+              <li>La <b>même définition d'API</b> sert des backends différents, sans la dupliquer</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Déploiement canary</h3>
+            <ul>
+              <li>Envoie un petit pourcentage du trafic de <b>production</b> vers la nouvelle version, le reste va à la version stable</li>
+              <li>Config : <code>percentTraffic</code> (ex. 10,5 %) et, au besoin, <code>stageVariableOverrides</code></li>
+              <li>Surveiller dans CloudWatch, augmenter petit à petit</li>
+              <li><b>Promouvoir</b> le canary = il devient la version à 100 % du trafic, et sa config est retirée</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 07 ACCES -->
+      <li class="branch focus">
+        <h2><span class="n">07</span>Contrôle d'accès<span class="sub">se protéger du trafic indésirable et autoriser les bons appelants</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Se protéger du trafic indésirable</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Mécanisme</th><th>Ce qu'il fait</th></tr></thead>
+              <tbody>
+                <tr><td><b>Resource policy</b></td><td>Limite qui peut appeler l'endpoint : un compte AWS précis, ou une plage d'IP (ex. celle du bureau). <b>API REST seulement</b></td></tr>
+                <tr><td><b>Domaine perso + certificats client</b></td><td>Domaine avec certificat SSL (ACM), puis certificats clients (valides 365 jours) : le backend vérifie qu'un appel vient bien d'API Gateway, ou d'un appareil IoT de confiance</td></tr>
+                <tr><td><b>AWS WAF</b></td><td>Pare-feu applicatif devant API Gateway. Bloque injections SQL et XSS, filtre par motif (en-têtes, corps, URI), par plage d'IP, pays ou bots. Règles gérées par AWS</td></tr>
+                <tr><td><b>CORS</b></td><td>Règle du <b>navigateur</b> pour les requêtes AJAX cross-origin (domaine, sous-domaine, port ou protocole différent). Les requêtes « simples » (GET) sont exemptées</td></tr>
+                <tr><td><b>Throttling</b></td><td>Protège contre la surcharge. Requête limitée = <b>HTTP 429</b> « Too Many Requests »</td></tr>
+              </tbody>
+            </table></div>
+            <ul style="margin-top:8px">
+              <li class="new"><span class="tag new">Précision</span> Deux choses distinctes : les <b>certificats client</b> générés par API Gateway (le backend vérifie l'appelant), et le <b>mutual TLS</b> sur un domaine personnalisé (les clients présentent un certificat validé contre un truststore)</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>CORS en détail</h3>
+            <ul>
+              <li>Requête non simple → le navigateur envoie d'abord un <b>preflight <code>OPTIONS</code></b> que le serveur doit approuver (origines, méthodes, en-têtes autorisés)</li>
+              <li>API Gateway peut gérer le preflight seul (un mock en coulisse pour REST, plus simple pour HTTP), ce qui décharge ton code</li>
+              <li class="trap"><span class="tag trap">Piège</span> Avec une intégration Lambda proxy, le preflight est géré, mais la vraie réponse doit porter elle-même les en-têtes CORS</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Throttling et usage plans</h3>
+            <ul>
+              <li>Quota Région par défaut : <span class="num">10 000</span> requêtes/seconde pour toutes les API du compte (relevable sur demande)</li>
+              <li>Réglable par <b>stage</b>, par <b>méthode / route</b>, et par <b>client</b> via un usage plan</li>
+              <li>Ordre d'application, du plus précis au plus général : client + méthode → client → méthode / stage → compte</li>
+              <li><b>Usage plan</b> (REST) : quels clients (identifiés par une <b>API key</b>) accèdent à quels stages, avec une limite de débit et un <b>quota</b> (par jour, semaine, mois). Plusieurs paliers possibles (User, Partner, Service)</li>
+              <li class="trap"><span class="tag trap">Piège</span> Une API key identifie et mesure un client, elle ne remplace pas une vraie authentification</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Autoriser les appelants : 4 options</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Option</th><th>Principe</th><th>Quand</th></tr></thead>
+              <tbody>
+                <tr><td><b>None</b></td><td>Accès ouvert à tous</td><td>API publique</td></tr>
+                <tr><td><b>IAM</b></td><td>L'appelant signe la requête avec des credentials AWS (souvent temporaires, via un SDK). Une requête non signée est rejetée</td><td>Appelants AWS, services internes</td></tr>
+                <tr><td><b>JWT</b></td><td>Jeton validé derrière OIDC / OAuth 2.0. REST : <b>Cognito</b> user pool. HTTP : Cognito ou un autre fournisseur JWT. Vérifie le jeton et son scope</td><td>Utilisateurs d'une application web ou mobile</td></tr>
+                <tr><td><b>Lambda authorizer</b></td><td>Une Lambda s'exécute <b>avant</b> l'intégration et valide un jeton bearer (OAuth maison, SAML) ou d'autres paramètres avec ta logique</td><td>Règles d'accès sur mesure</td></tr>
+              </tbody>
+            </table></div>
+            <ul style="margin-top:8px">
+              <li>Un authorizer se configure par route, ou se partage entre routes</li>
+              <li class="new"><span class="tag new">Précision</span> Lambda authorizer : c'est l'<b>authorizer</b> qui renvoie le verdict (une policy IAM, ou <code>isAuthorized</code> true/false pour une HTTP API). La fonction cible reçoit ensuite les données <code>context</code> de l'authorizer, ce qui lui permet de gérer un refus proprement</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 08 -->
+      <li class="branch">
+        <h2><span class="n">08</span>Surveillance</h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Métriques CloudWatch (automatiques, chaque minute)</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Métrique</th><th>Sens</th></tr></thead>
+              <tbody>
+                <tr><td><code>Count</code></td><td>Nombre total d'appels sur la période</td></tr>
+                <tr><td><code>IntegrationLatency</code></td><td>Temps de réponse du <b>backend</b> seul</td></tr>
+                <tr><td><code>Latency</code></td><td>Aller-retour complet : de la réception de la requête par API Gateway à la réponse au client</td></tr>
+                <tr><td><code>4XXError</code> / <code>5XXError</code></td><td>Erreurs côté client / côté serveur</td></tr>
+              </tbody>
+            </table></div>
+            <ul style="margin-top:6px">
+              <li>Aucune config requise, conservées <span class="num">15 mois</span></li>
+              <li><code>Latency</code> moins <code>IntegrationLatency</code> = le temps passé dans API Gateway lui-même</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Access logs (optionnels, par stage)</h3>
+            <ul>
+              <li>1. Créer un <b>log group</b> CloudWatch</li>
+              <li>2. Le pointer dans les paramètres d'access log du stage, avec un format (Common Log Format ou JSON) : IP source, heure, méthode, route, statut, taille de réponse, ID de requête</li>
+              <li>Les logs d'<b>erreur</b> sont créés automatiquement. Les access logs demandent cette config explicite</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Les 3 autres outils</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Outil</th><th>Répond à</th></tr></thead>
+              <tbody>
+                <tr><td><b>X-Ray</b></td><td>« Où une transaction passe-t-elle son temps dans mon application distribuée ? » Regroupe les données de chaque service touché en une <b>trace</b>, avec la distribution des latences. Activable directement sur API Gateway</td></tr>
+                <tr><td><b>Config</b></td><td>« Cette ressource respecte-t-elle nos règles ? » Snapshot de configuration, règles de conformité, notification SNS en cas d'écart</td></tr>
+                <tr><td><b>CloudTrail</b></td><td>« Qui a modifié quoi, et quand ? » Activé par défaut, enregistre chaque appel d'API lié à API Gateway (console, SDK, CLI)</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 09 -->
+      <li class="branch">
+        <h2><span class="n">09</span>Optimisation</h2>
+        <div class="cols">
+          <div class="blk">
+            <h3>Cache (API REST)</h3>
+            <ul>
+              <li>Met en cache les réponses aux <b>GET</b> : moins d'appels au backend, latence réduite</li>
+              <li>Clés de cache possibles : chemin, en-têtes, query strings</li>
+              <li>Réglable <b>par stage ou par méthode</b>, avec un <b>TTL</b> modifiable. Chiffrement du cache possible</li>
+              <li class="trap"><span class="tag trap">Piège</span> Facturé <b>à l'heure, utilisé ou non</b> : un coût fixe, pas du paiement à l'usage</li>
+              <li>Métriques : <code>CacheHitCount</code> (servi par le cache) et <code>CacheMissCount</code> (servi par le backend)</li>
+            </ul>
+          </div>
+          <div class="blk">
+            <h3>Compression des payloads</h3>
+            <ul>
+              <li>Réduit les données échangées client ↔ API Gateway : moins de coût et de latence</li>
+              <li>Codages : <code>deflate</code>, <code>gzip</code>, <code>identity</code></li>
+              <li><code>minimumCompressionSize</code> fixe le seuil ; <code>0</code> compresse tout</li>
+              <li>La <b>décompression</b> des requêtes est active par défaut, la <b>compression</b> des réponses se configure</li>
+              <li class="trap"><span class="tag trap">Piège</span> Compresser un tout petit payload peut l'agrandir, et coûte du calcul des deux côtés : tester le bon seuil</li>
+            </ul>
+          </div>
+        </div>
+      </li>
+
+      <!-- 10 -->
+      <li class="branch">
+        <h2><span class="n">10</span>Scénario du lab : le café</h2>
+        <div class="cols">
+          <div class="blk"><ul>
+            <li>Application web (hébergée sur S3) qui lit et écrit la table DynamoDB <code>FoodProducts</code> <b>via une API</b>, pas directement depuis le JavaScript du navigateur</li>
+            <li>Démarche : 1. API avec des <b>mock endpoints</b> → 2. validation par les parties prenantes → 3. remplacement des mocks par de vraies intégrations (Lambda ↔ DynamoDB)</li>
+          </ul></div>
+          <div class="blk"><ul>
+            <li>Le contrat public de l'API ne change pas : API Gateway reste une porte d'entrée stable que l'on peut repointer vers d'autres backends</li>
+            <li>Points à ne pas oublier avec ce montage : les en-têtes CORS dans la réponse de la Lambda, et la conversion des <code>Decimal</code> avant <code>json.dumps</code> (voir la carte DynamoDB)</li>
+          </ul></div>
+        </div>
+      </li>
+
+      <!-- 11 HORS NOTES -->
+      <li class="branch">
+        <h2><span class="n">11</span>Hors de tes notes<span class="sub">à connaître pour le DVA-C02</span></h2>
+        <div class="cols">
+
+          <div class="blk">
+            <h3>Les codes d'erreur à reconnaître</h3>
+            <div class="tbl"><table>
+              <thead><tr><th>Code</th><th>Cause typique</th></tr></thead>
+              <tbody>
+                <tr><td><b>400</b></td><td>Requête invalide, ou refusée par la validation de requête</td></tr>
+                <tr><td><b>401</b></td><td>Non autorisé : jeton absent ou invalide pour l'authorizer</td></tr>
+                <tr><td><b>403</b></td><td>Refusé : IAM, resource policy, WAF, API key manquante. « Missing Authentication Token » = souvent une <b>route ou un chemin inexistant</b></td></tr>
+                <tr><td><b>429</b></td><td>Throttling : trop de requêtes</td></tr>
+                <tr><td><b>502</b></td><td>Réponse du backend invalide, typiquement une Lambda proxy qui ne renvoie pas la forme attendue</td></tr>
+                <tr><td><b>504</b></td><td>Timeout d'intégration</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="blk">
+            <h3>Limites</h3>
+            <ul>
+              <li class="trap"><span class="tag trap">Piège</span> Timeout d'intégration : <span class="num">29 s</span> par défaut pour une API REST (30 s pour une HTTP API)
+                <ul><li>Depuis juin 2024, relevable au-delà de 29 s pour les REST régionales et privées, avec un impact possible sur le quota de débit</li></ul>
+              </li>
+              <li>Payload max : <span class="num">10 MB</span> par requête ou réponse. Une Lambda appelée en synchrone : 6 MB</li>
+              <li>Throttling : <span class="num">10 000</span> req/s en régime établi, avec un <b>burst</b> de <span class="num">5 000</span> requêtes</li>
+              <li>Message WebSocket : <span class="num">128 KB</span></li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Authorizer et cache</h3>
+            <ul>
+              <li>Le résultat d'un Lambda authorizer est mis en cache : TTL par défaut <span class="num">300 s</span> (0 à 3 600 s)</li>
+              <li>Cache des réponses : TTL par défaut <span class="num">300 s</span>, maximum <span class="num">3 600 s</span></li>
+              <li>Invalider le cache : l'appelant envoie l'en-tête <code>Cache-Control: max-age=0</code>, avec la permission d'invalider</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>Validation et domaine perso</h3>
+            <ul>
+              <li><b>Validation de requête</b> (REST) : paramètres, en-têtes et corps vérifiés contre un <b>modèle JSON Schema</b> avant d'appeler le backend → <code>400</code> sinon. Économise des invocations Lambda</li>
+              <li>Domaine personnalisé : certificat <b>ACM</b>. Endpoint edge-optimized : certificat en <code>us-east-1</code>. Endpoint régional : certificat dans la même Région</li>
+            </ul>
+          </div>
+
+          <div class="blk">
+            <h3>WebSocket, SAM, variables</h3>
+            <ul>
+              <li>Pour écrire à un client connecté depuis le backend : appeler l'API <code>@connections</code> avec son <code>connectionId</code></li>
+              <li>SAM : un event <code>Api</code> crée une API <b>REST</b>, un event <code>HttpApi</code> crée une API <b>HTTP</b>. <code>sam local start-api</code> les simule en local</li>
+              <li>Variable de stage qui désigne une Lambda : API Gateway doit avoir la permission de l'invoquer (<code>lambda:InvokeFunction</code>), à ajouter à la main</li>
+            </ul>
+          </div>
+
+        </div>
+      </li>
+
+      <!-- 12 GLOSSAIRE -->
+      <li class="branch">
+        <h2><span class="n">12</span>Glossaire des sigles</h2>
+        <dl class="gloss">
+          <div><dt>API</dt><dd>Application Programming Interface</dd></div>
+          <div><dt>REST</dt><dd>Representational State Transfer</dd></div>
+          <div><dt>WSS</dt><dd>WebSocket Secure <em>(WebSocket sur TLS)</em></dd></div>
+          <div><dt>VTL</dt><dd>Velocity Template Language <em>(mapping templates)</em></dd></div>
+          <div><dt>OIDC</dt><dd>OpenID Connect</dd></div>
+          <div><dt>JWT</dt><dd>JSON Web Token</dd></div>
+          <div><dt>WAF</dt><dd>Web Application Firewall</dd></div>
+          <div><dt>mTLS</dt><dd>Mutual TLS <em>(client et serveur se présentent un certificat)</em></dd></div>
+          <div><dt>ACM</dt><dd>AWS Certificate Manager</dd></div>
+          <div><dt>IAM</dt><dd>Identity and Access Management</dd></div>
+          <div><dt>VPC</dt><dd>Virtual Private Cloud</dd></div>
+          <div><dt>ALB</dt><dd>Application Load Balancer</dd></div>
+          <div><dt>NLB</dt><dd>Network Load Balancer</dd></div>
+          <div><dt>CORS</dt><dd>Cross-Origin Resource Sharing</dd></div>
+          <div><dt>TTL</dt><dd>Time To Live <em>(durée de vie dans le cache)</em></dd></div>
+          <div><dt>SAM</dt><dd>Serverless Application Model</dd></div>
+          <div><dt>CDK</dt><dd>Cloud Development Kit</dd></div>
+          <div><dt>SDK</dt><dd>Software Development Kit</dd></div>
+          <div><dt>SNS</dt><dd>Simple Notification Service</dd></div>
+          <div><dt>SQS</dt><dd>Simple Queue Service</dd></div>
+          <div><dt>DDoS</dt><dd>Distributed Denial of Service</dd></div>
+          <div><dt>CDN</dt><dd>Content Delivery Network <em>(CloudFront)</em></dd></div>
+        </dl>
+      </li>
+
+    </ul>
+  </div>
+
+  <section class="recap">
+    <h2>Les réflexes pour l'examen</h2>
+    <ol>
+      <li>Simple passage vers Lambda, au moindre coût → HTTP API. Besoin d'API keys, usage plans, cache, mock ou API privée → REST API.</li>
+      <li>Échange bidirectionnel en temps réel (chat, direct) → WebSocket API avec ses route keys.</li>
+      <li>Clients répartis dans le monde → edge-optimized. Accessible seulement depuis un VPC → private. Les deux sont REST seulement.</li>
+      <li>Lambda proxy → renvoyer <code>statusCode</code>, <code>headers</code>, <code>body</code> (chaîne). Sinon erreur 502.</li>
+      <li>Transformer requête et réponse sans toucher la Lambda → intégration non-proxy avec templates VTL.</li>
+      <li>Appeler SQS ou Step Functions sans Lambda → intégration directe vers le service AWS.</li>
+      <li>Migrer un monolithe petit à petit → intégration HTTP proxy, route par route.</li>
+      <li>Atteindre un ALB ou NLB privé dans un VPC → VPC Link.</li>
+      <li>Une API, plusieurs environnements → stages et variables de stage (alias Lambda).</li>
+      <li>Tester une nouvelle version sur un peu de trafic réel → déploiement canary (<code>percentTraffic</code>).</li>
+      <li>Changement d'une API REST invisible → redéployer sur le stage.</li>
+      <li>Erreur 429 → throttling. Limiter par client → usage plan avec API key et quota.</li>
+      <li>Restreindre par IP ou par compte → resource policy (REST seulement). Bloquer injections SQL, XSS, pays → WAF.</li>
+      <li>Le backend doit vérifier que l'appel vient d'API Gateway → certificat client. Authentifier le client lui-même → mTLS sur domaine personnalisé.</li>
+      <li>Utilisateurs d'une app → Cognito / JWT. Logique de jeton sur mesure → Lambda authorizer. Appelants AWS → IAM.</li>
+      <li>Une API key n'est pas un mécanisme de sécurité.</li>
+      <li>Erreur CORS dans le navigateur → activer CORS (preflight OPTIONS). Avec Lambda proxy, la Lambda renvoie elle-même les en-têtes.</li>
+      <li>502 → réponse Lambda mal formée. 504 → timeout (29 s). 403 « Missing Authentication Token » → mauvaise route.</li>
+      <li>Latency contre IntegrationLatency pour situer la lenteur. Suivre une requête à travers les services → X-Ray. Qui a modifié la config → CloudTrail. Conformité → Config.</li>
+      <li>Réduire les appels backend sur les GET → cache (facturé à l'heure). Réduire la taille des échanges → compression.</li>
+    </ol>
+  </section>
+</div>
