@@ -69,7 +69,7 @@ docker <cmd> -f $(docker <cmd> -aq)
 
 ```bash
 ## 1. Define the base image
-FROM python:3.8-slim 
+FROM python:3.14-slim 
 
 ## 2. Set the working directory inside the container
 WORKDIR /app
@@ -88,6 +88,24 @@ EXPOSE 5000
 CMD [ "python", "app.py" ]
 ```
 
+### CMD: exec form vs shell form
+
+A Dockerfile should have **one effective `CMD`** (if there are several, only the last one counts). The `CMD` is a single program followed by its arguments.
+
+```bash
+# Exec form (JSON list): one program, each argument is its own string.
+# Equivalent to typing: uvicorn main:app --host 0.0.0.0 --port 8080
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+# Several commands: run them through a shell (the program is "sh",
+# and the whole chain is a single argument given to it with -c)
+CMD ["sh", "-c", "command1 && command2"]
+```
+
+- Use `RUN` for preparation steps (install, copy, build) and keep `CMD` for the one program that must stay running.
+- Options work in pairs, each in its own string: `"--host", "0.0.0.0"` (not `"--host 0.0.0.0"`).
+- `EXPOSE` only documents the port. It does not publish anything (see *Port mapping* below).
+
 ## Working with Containers
 
 
@@ -98,7 +116,17 @@ docker ps -a  ## List All Containers (Including Stopped Ones)
 
 ```sh
 # Run a container 
-docker run my-python-app :latest 
+docker run my-python-app:latest 
+
+# Port mapping: -p host_port:container_port (done at launch, NOT in the Dockerfile)
+# - EXPOSE 8080 (Dockerfile)   -> documentation only, publishes nothing
+# - --port 8080 (CMD/uvicorn)  -> port the app listens on inside the container
+# - -p 8080:8080 (docker run)  -> publishes the container port on the host
+# The numbers can differ: -p 9000:8080 gives localhost:9000 on the host.
+docker run -p 8080:8080 mon-api
+
+# Test the API from another terminal (expected: HTTP/1.1 200 OK and {"message":"Bonjour, API!"})
+curl -i http://localhost:8080
 
 # The -v flag in the docker run command is used to mount a volume (which can be a file or directory) from your local machine (host) into the container.
 
@@ -114,8 +142,8 @@ docker run -d --name mycontainer ubuntu:latest
 # View Logs of a Container 
 docker logs mycontainer
 
-# Execute a Command 
-docker exec -it mycontainer /bin/bash ls -l /app in a Running Container
+# Execute a command in a running container
+docker exec -it mycontainer ls -l /app
 
 # Restart a Container
 docker restart mycontainer
@@ -196,8 +224,6 @@ docker <cmd> -f $(docker <cmd> -aq)
 ### Example `docker-compose.yml`
 
 ```yaml
-version: '3.8'
-
 services:
   ecommerce-ui:
     image: ecommerce-ui:1.0.0
@@ -261,10 +287,10 @@ volumes:
 
 ```sh
  # Run a Compose Stack
-docker-compose up -d
+docker compose up -d
 
 # Stop Compose Stack
-docker-compose down 
+docker compose down 
 
 # Help
 docker <cmd> --help
