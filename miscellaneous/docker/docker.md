@@ -123,9 +123,9 @@ docker run my-python-app:latest
 # - --port 8080 (CMD/uvicorn)  -> port the app listens on inside the container
 # - -p 8080:8080 (docker run)  -> publishes the container port on the host
 # The numbers can differ: -p 9000:8080 gives localhost:9000 on the host.
-docker run -p 8080:8080 mon-api
+docker run -p 8080:8080 my-api
 
-# Test the API from another terminal (expected: HTTP/1.1 200 OK and {"message":"Bonjour, API!"})
+# Test the API from another terminal (expected: HTTP/1.1 200 OK and the JSON response)
 curl -i http://localhost:8080
 
 # The -v flag in the docker run command is used to mount a volume (which can be a file or directory) from your local machine (host) into the container.
@@ -284,6 +284,53 @@ volumes:
   mongodb_shipping_data:
   mysql_profile_management_data:
 ```
+
+### `image:` vs `build:`
+
+- `image:` uses an image that **already exists** (found locally, otherwise pulled from Docker Hub or a registry). This is the case in the example above.
+- `build:` **builds** the image from a Dockerfile.
+- Both together: Compose builds the image, then names and tags it. Without `image:`, Compose picks a name automatically (based on the folder and service names, for example `api-api`).
+
+```yaml
+# build: instead of image:, builds the image from a Dockerfile
+services:
+  api:
+    # "." = build context: the folder containing the Dockerfile (same folder as docker-compose.yml)
+    build: .
+    # If the Dockerfile is elsewhere, specify it in one of these ways:
+    # build: ./other-folder
+    # build:
+    #   context: ./other-folder
+    #   dockerfile: Dockerfile
+```
+
+```yaml
+# build + image: builds the image, then names and tags it (useful to push it to a registry)
+services:
+  api:
+    build: .
+    image: my-api:1.0.0
+```
+
+### Development compose example (FastAPI + Uvicorn)
+
+```yaml
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount the local code on the Dockerfile's WORKDIR (here /app)
+      - ./app:/app
+    # command: replaces the CMD of the Dockerfile; --reload only in development
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+```
+
+- The volume must target the **`WORKDIR` of the Dockerfile** (here `/app`), otherwise the container does not see the mounted code.
+- `command:` replaces the `CMD` of the Dockerfile, so `--reload` exists only in the compose file.
+- The Dockerfile stays the "production" version: the code is copied into the image, with no volume and no `--reload`.
+- Launch with `docker compose up --build`. A plain `up` does not rebuild the image after a change in the Dockerfile.
 
 ```sh
  # Run a Compose Stack
